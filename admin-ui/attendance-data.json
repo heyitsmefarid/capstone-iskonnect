@@ -1,0 +1,5616 @@
+[
+  {
+    "id": 1,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 16:15:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 08:26:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 09:39:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 15:06:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 11:33:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 09:59:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 12:06:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 13:05:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 11:39:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": false,
+        "timeLogged": "2025-04-22 10:55:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 13:52:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 17:45:48",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 11:39:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 17:07:11",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 13:19:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 14:32:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 09:38:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 16:40:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 12:11:48",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 14:36:52",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "status": "graduated",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 16:36:01",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 09:49:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 08:24:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 14:21:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 14:17:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 15:22:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 13:36:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 11:56:19",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 15:26:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 09:32:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 16:00:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 16:49:25",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 17:01:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 16:21:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 16:28:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 10:47:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 10:59:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 16:24:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 09:59:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 09:44:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 17:20:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 08:51:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 10:58:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 14:52:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 13:47:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 08:16:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 16:02:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 12:53:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 13:26:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 14:30:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 16:28:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 12:35:44",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 46,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 16:09:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 12:52:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": false,
+        "timeLogged": "2024-10-15 13:19:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 13:14:56",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 13:36:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 17:01:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 08:54:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 08:39:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 15:32:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 09:21:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 13:06:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 09:04:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 10:47:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 16:33:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 11:53:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 11:19:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": false,
+        "timeLogged": "2025-11-15 12:01:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 08:37:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 15:37:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 15:13:48",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 47,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 13:11:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 09:23:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 09:10:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 17:53:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 08:00:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 09:51:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 13:37:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 16:03:11",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 09:27:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 16:31:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 14:06:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 10:42:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 14:28:01",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 13:39:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 12:12:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 16:11:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 12:33:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 13:29:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 17:53:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 14:58:53",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 48,
+    "status": "active",
+    "pattern": "atrisk",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": false,
+        "timeLogged": "2024-08-15 13:55:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": false,
+        "timeLogged": "2024-09-20 10:04:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 12:02:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 10:19:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 10:42:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": false,
+        "timeLogged": "2025-01-20 13:37:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 17:31:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": false,
+        "timeLogged": "2025-03-05 13:29:28",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 14:04:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": false,
+        "timeLogged": "2025-04-22 08:16:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 15:29:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 17:07:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 13:42:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 17:35:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 14:54:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 14:35:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 10:14:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 08:19:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 08:58:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 09:10:00",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 49,
+    "status": "graduated",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 10:13:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 09:33:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 11:13:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": false,
+        "timeLogged": "2024-11-25 10:24:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 15:06:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 14:58:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 08:27:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 09:13:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 11:15:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 11:08:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 17:27:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 15:01:55",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 50,
+    "status": "graduated",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 16:07:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 11:05:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 13:41:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 17:29:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 16:19:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 08:49:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 11:39:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 09:22:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 17:51:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 15:12:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 16:00:48",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 08:06:15",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 52,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 13:38:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 14:35:45",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 11:41:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 09:56:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 10:33:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 10:56:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 14:19:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 11:51:01",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 16:08:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 10:36:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 16:53:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 08:04:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 13:24:11",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 17:40:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 17:14:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 14:30:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 08:18:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 16:45:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 12:22:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 17:51:04",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 53,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 15:54:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 12:53:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 16:52:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 08:41:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 12:31:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 11:34:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 13:09:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": false,
+        "timeLogged": "2025-03-05 09:04:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 13:09:19",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 13:37:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": false,
+        "timeLogged": "2025-05-10 13:52:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 12:09:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 13:22:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 15:43:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 11:13:05",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 16:12:35",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 16:11:28",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 09:23:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 17:08:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 10:04:58",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 54,
+    "status": "active",
+    "pattern": "good",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 13:00:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 10:52:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 17:23:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 08:25:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 10:50:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 16:27:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 10:30:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 08:41:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": false,
+        "timeLogged": "2025-03-15 17:15:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 13:56:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 12:10:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 08:35:56",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 15:30:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": false,
+        "timeLogged": "2025-08-15 14:06:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": false,
+        "timeLogged": "2025-09-20 11:54:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 08:09:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 16:20:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 14:52:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 10:10:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 08:39:37",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 55,
+    "status": "on-hold",
+    "pattern": "atrisk",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 09:49:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 12:42:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 13:25:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": false,
+        "timeLogged": "2024-11-25 11:30:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 17:49:45",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": false,
+        "timeLogged": "2025-01-20 17:54:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 08:53:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": false,
+        "timeLogged": "2025-03-05 10:20:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 15:45:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": false,
+        "timeLogged": "2025-04-22 13:13:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": false,
+        "timeLogged": "2025-05-10 10:45:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": false,
+        "timeLogged": "2025-06-05 15:52:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 14:34:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 11:15:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 13:28:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 09:48:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 17:51:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 17:59:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 12:47:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 13:37:02",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 56,
+    "status": "on-hold",
+    "pattern": "atrisk",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": false,
+        "timeLogged": "2024-08-15 15:10:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": false,
+        "timeLogged": "2024-09-20 09:53:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 09:30:48",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": false,
+        "timeLogged": "2024-11-25 08:08:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 15:42:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 09:48:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 16:50:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 17:27:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 12:46:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": false,
+        "timeLogged": "2025-04-22 09:27:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 15:03:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 09:37:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 11:07:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": false,
+        "timeLogged": "2025-08-15 10:27:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 14:33:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 13:49:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": false,
+        "timeLogged": "2025-11-15 13:36:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 13:57:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 11:04:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": false,
+        "timeLogged": "2025-12-20 12:35:29",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 57,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 14:32:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 13:30:56",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 17:48:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 16:39:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 14:15:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 14:22:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 17:35:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 16:06:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 11:26:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 15:53:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 17:11:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 11:56:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 14:57:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 12:37:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 14:57:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 11:49:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 12:23:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 11:50:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 12:04:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 14:06:52",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 58,
+    "status": "active",
+    "pattern": "atrisk",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 16:06:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 13:06:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 16:19:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 17:33:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 16:14:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 17:15:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 17:15:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 13:49:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": false,
+        "timeLogged": "2025-03-15 11:34:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": false,
+        "timeLogged": "2025-04-22 17:34:19",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": false,
+        "timeLogged": "2025-05-10 15:49:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 09:05:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": false,
+        "timeLogged": "2025-07-15 15:51:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 10:32:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 08:57:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 08:11:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": false,
+        "timeLogged": "2025-11-15 11:39:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 10:26:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": false,
+        "timeLogged": "2025-12-15 13:35:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 09:50:57",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 59,
+    "status": "active",
+    "pattern": "good",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 12:09:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": false,
+        "timeLogged": "2024-09-20 17:08:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 12:37:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 13:59:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 10:07:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 11:00:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 10:30:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 09:51:45",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": false,
+        "timeLogged": "2025-03-15 14:30:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 08:28:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": false,
+        "timeLogged": "2025-05-10 16:54:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 14:13:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 15:50:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 12:53:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 17:47:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 12:21:05",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": false,
+        "timeLogged": "2025-11-15 11:49:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 09:44:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 08:47:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 12:37:33",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 60,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 08:43:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": false,
+        "timeLogged": "2024-09-20 12:46:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 10:55:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 10:35:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 13:21:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 17:59:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 17:58:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 17:55:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 08:05:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 13:05:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 12:01:37",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 08:03:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 09:48:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 14:21:48",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 14:19:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 09:49:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 14:13:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": false,
+        "timeLogged": "2025-11-25 10:21:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 15:47:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 10:52:39",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 71,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 12:59:35",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 15:53:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 15:54:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 15:38:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": false,
+        "timeLogged": "2024-12-10 11:57:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 16:36:56",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 11:49:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 11:52:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 16:01:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 09:14:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 10:44:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 10:21:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 14:03:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 13:21:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 10:22:37",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 11:32:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": false,
+        "timeLogged": "2025-11-15 12:05:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 14:59:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 16:26:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 11:17:28",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 72,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 11:36:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 15:15:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 13:06:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 08:41:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 16:55:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 13:14:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 08:11:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 14:45:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 14:44:56",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 12:05:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 11:17:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 08:52:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 10:06:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 17:09:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 17:19:45",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 12:47:45",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 13:35:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 08:54:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 12:46:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 16:14:03",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 73,
+    "status": "active",
+    "pattern": "good",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": false,
+        "timeLogged": "2024-08-15 08:45:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 09:42:05",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 17:43:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": false,
+        "timeLogged": "2024-11-25 08:48:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 10:52:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 16:05:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 09:21:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 16:26:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 16:34:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 12:33:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 16:36:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 11:48:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 13:39:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 08:48:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 14:46:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 13:32:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 16:16:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": false,
+        "timeLogged": "2025-11-25 15:17:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 10:09:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 15:44:02",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 74,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 10:26:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 17:02:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 08:15:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 13:41:45",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 16:45:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 08:04:48",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 15:44:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 12:41:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": false,
+        "timeLogged": "2025-03-15 11:16:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 12:48:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 13:20:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 10:18:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 15:21:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 11:44:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 15:37:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 14:57:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 14:22:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 13:47:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 16:52:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 13:09:13",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 75,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 11:16:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 16:50:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 16:44:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 09:15:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 17:35:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": false,
+        "timeLogged": "2025-01-20 08:39:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": false,
+        "timeLogged": "2025-02-10 11:21:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 10:14:05",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 14:24:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 09:24:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 09:09:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 15:00:11",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 08:16:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 14:18:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 08:54:11",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 17:34:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 09:19:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 10:12:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 14:39:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 17:01:08",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 76,
+    "status": "active",
+    "pattern": "good",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 16:06:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 15:48:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 08:30:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 17:13:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 13:26:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 11:53:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 08:35:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 08:02:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 13:33:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": false,
+        "timeLogged": "2025-04-22 15:18:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": false,
+        "timeLogged": "2025-05-10 10:15:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 16:40:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 10:17:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 08:24:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 08:42:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 13:35:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 14:45:37",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": false,
+        "timeLogged": "2025-11-25 08:44:35",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": false,
+        "timeLogged": "2025-12-15 16:58:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 13:31:58",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 77,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 15:08:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 14:54:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 16:18:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 13:37:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 17:07:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 09:02:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 08:43:35",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 12:45:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 13:06:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 16:44:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 12:30:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 13:09:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": false,
+        "timeLogged": "2025-07-15 10:29:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 12:43:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 13:57:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 10:07:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 13:17:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": false,
+        "timeLogged": "2025-11-25 17:47:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 14:12:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 12:00:48",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 78,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 17:30:28",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 12:36:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 15:59:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 11:53:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 08:29:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 16:43:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 12:41:37",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 11:04:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 13:36:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": false,
+        "timeLogged": "2025-04-22 13:35:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 13:02:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 17:54:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 11:44:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 13:58:11",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 14:38:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": false,
+        "timeLogged": "2025-10-15 11:41:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 13:34:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 10:10:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 14:43:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 08:11:29",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 79,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 10:13:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 16:37:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 09:42:35",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 11:17:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 13:53:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 11:47:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 16:05:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 12:36:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 15:41:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 15:37:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 08:22:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": false,
+        "timeLogged": "2025-06-05 12:53:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 08:21:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 09:25:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 16:03:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 08:00:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 09:05:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 14:40:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 11:13:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 15:59:05",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 80,
+    "status": "on-hold",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 09:59:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 10:14:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 13:11:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": false,
+        "timeLogged": "2024-11-25 11:50:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 10:16:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 14:35:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": false,
+        "timeLogged": "2025-02-10 16:52:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 12:25:45",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 11:56:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 11:24:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 17:19:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 15:59:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 16:58:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 12:33:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 10:43:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 13:37:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 12:33:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 10:33:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 10:23:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 09:37:59",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 81,
+    "status": "graduated",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": false,
+        "timeLogged": "2024-08-15 16:00:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 15:50:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 09:25:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 11:44:11",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 13:03:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 14:00:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 14:34:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 09:48:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 14:22:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 12:00:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 08:22:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 10:28:31",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 82,
+    "status": "active",
+    "pattern": "atrisk",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": false,
+        "timeLogged": "2024-08-15 09:34:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": false,
+        "timeLogged": "2024-09-20 13:45:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 10:21:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 15:16:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 11:39:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 17:05:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": false,
+        "timeLogged": "2025-02-10 08:29:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": false,
+        "timeLogged": "2025-03-05 13:46:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": false,
+        "timeLogged": "2025-03-15 16:06:05",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 11:59:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 08:23:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 15:08:05",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 08:33:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": false,
+        "timeLogged": "2025-08-15 17:20:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 15:39:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 08:08:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 08:39:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 08:21:37",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 11:21:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 14:10:21",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 83,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 14:42:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 09:46:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": false,
+        "timeLogged": "2024-10-15 16:08:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 17:40:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 13:26:28",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 17:36:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 12:24:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 12:18:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 12:09:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 12:34:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 12:36:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 16:20:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 15:12:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 11:59:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 16:39:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 12:21:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 14:07:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 16:01:01",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": false,
+        "timeLogged": "2025-12-15 17:15:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 08:35:34",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 84,
+    "status": "graduated",
+    "pattern": "good",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 16:43:45",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": false,
+        "timeLogged": "2024-09-20 13:56:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 09:52:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 09:38:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 11:08:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 08:12:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 09:48:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 15:06:01",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": false,
+        "timeLogged": "2025-03-15 12:12:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 14:46:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 16:13:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 08:07:34",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 85,
+    "status": "on-hold",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 17:37:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 10:55:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 16:03:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 11:00:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 08:31:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 13:49:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 11:10:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 15:30:37",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 17:55:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 14:15:28",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 16:50:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 10:40:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 11:25:36",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 12:26:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 09:01:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": false,
+        "timeLogged": "2025-10-15 12:38:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 14:17:28",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 13:46:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 17:57:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 17:39:40",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 86,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 14:03:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 13:23:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 13:00:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 09:14:45",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 13:35:19",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 13:57:56",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 15:11:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 16:02:37",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 10:58:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": false,
+        "timeLogged": "2025-04-22 08:28:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 13:20:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 09:38:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": false,
+        "timeLogged": "2025-07-15 12:18:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 11:20:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 08:06:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 10:39:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 08:26:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 13:54:19",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 08:15:04",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 15:21:13",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 87,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 08:55:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 12:05:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 08:17:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 09:46:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 08:21:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 14:37:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 16:36:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 14:58:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 11:39:35",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 15:05:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 14:13:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 11:34:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 15:23:22",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 17:53:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 15:13:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 17:15:48",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": false,
+        "timeLogged": "2025-11-15 16:26:46",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 09:57:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 15:49:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 08:16:06",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 88,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 14:22:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": false,
+        "timeLogged": "2024-09-20 08:14:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 15:45:19",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 12:38:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 13:25:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 16:21:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 12:55:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 08:12:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 10:18:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 16:37:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 10:50:43",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 17:03:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 09:40:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": false,
+        "timeLogged": "2025-08-15 08:53:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 12:57:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 14:45:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 14:23:07",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 14:34:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 12:51:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 08:06:10",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 89,
+    "status": "active",
+    "pattern": "good",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 11:20:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 16:34:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": false,
+        "timeLogged": "2024-10-15 16:35:13",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 08:26:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 11:21:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 11:02:58",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 17:39:23",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 13:34:40",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 16:19:55",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": false,
+        "timeLogged": "2025-04-22 13:10:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": false,
+        "timeLogged": "2025-05-10 17:41:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 10:33:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": false,
+        "timeLogged": "2025-07-15 17:49:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 09:32:54",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 15:21:01",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 09:17:09",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 10:06:57",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 12:55:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 16:56:48",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 08:56:01",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 90,
+    "status": "active",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 15:54:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 09:36:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 15:05:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 14:01:38",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 16:25:06",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 10:04:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 11:04:25",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 17:36:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 14:19:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 08:05:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 14:20:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 17:01:28",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Mid-Year Evaluation",
+        "date": "2025-07-15",
+        "present": true,
+        "timeLogged": "2025-07-15 13:21:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Orientation Seminar",
+        "date": "2025-08-15",
+        "present": true,
+        "timeLogged": "2025-08-15 10:31:08",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2025-09-20",
+        "present": true,
+        "timeLogged": "2025-09-20 10:15:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2025-10-15",
+        "present": true,
+        "timeLogged": "2025-10-15 16:42:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Alumni Homecoming",
+        "date": "2025-11-15",
+        "present": true,
+        "timeLogged": "2025-11-15 15:07:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2025-11-25",
+        "present": true,
+        "timeLogged": "2025-11-25 13:15:27",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Christmas Party",
+        "date": "2025-12-15",
+        "present": true,
+        "timeLogged": "2025-12-15 11:07:50",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2025-12-20",
+        "present": true,
+        "timeLogged": "2025-12-20 14:42:57",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 91,
+    "status": "graduated",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 11:42:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 17:11:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 09:35:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 13:47:34",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 17:34:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 14:44:31",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 11:32:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 11:36:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 13:13:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 15:10:02",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 14:33:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 13:32:51",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 92,
+    "status": "graduated",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 14:16:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 08:40:59",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 12:29:12",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 12:58:14",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 10:22:29",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": false,
+        "timeLogged": "2025-01-20 11:21:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 15:12:49",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 11:07:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 08:10:18",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 15:36:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 11:04:51",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 15:48:07",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 93,
+    "status": "graduated",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 09:52:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 10:10:10",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 12:07:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 13:50:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 17:07:28",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 14:27:41",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 17:07:26",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 12:56:24",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 10:07:01",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 14:34:03",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 14:49:01",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 09:27:53",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 94,
+    "status": "graduated",
+    "pattern": "atrisk",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 13:09:28",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 13:01:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 14:00:15",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 09:22:56",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 14:08:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 17:33:00",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 16:22:20",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 11:09:39",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 08:46:52",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 12:26:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": false,
+        "timeLogged": "2025-05-10 08:24:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 13:58:09",
+        "loggedVia": "Manual"
+      }
+    ]
+  },
+  {
+    "id": 95,
+    "status": "graduated",
+    "pattern": "excellent",
+    "attendance": [
+      {
+        "activity": "Orientation Seminar",
+        "date": "2024-08-15",
+        "present": true,
+        "timeLogged": "2024-08-15 17:59:47",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Community Service Day",
+        "date": "2024-09-20",
+        "present": true,
+        "timeLogged": "2024-09-20 12:26:44",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Leadership Training",
+        "date": "2024-10-15",
+        "present": true,
+        "timeLogged": "2024-10-15 15:40:42",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Thanksgiving Celebration",
+        "date": "2024-11-25",
+        "present": true,
+        "timeLogged": "2024-11-25 16:15:17",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Year-End Assembly",
+        "date": "2024-12-10",
+        "present": true,
+        "timeLogged": "2024-12-10 17:06:35",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "General Assembly - 1st Sem",
+        "date": "2025-01-20",
+        "present": true,
+        "timeLogged": "2025-01-20 14:26:16",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Scholarship Summit",
+        "date": "2025-02-10",
+        "present": true,
+        "timeLogged": "2025-02-10 10:26:32",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Skills Workshop - Excel",
+        "date": "2025-03-05",
+        "present": true,
+        "timeLogged": "2025-03-05 10:17:21",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Career Guidance Seminar",
+        "date": "2025-03-15",
+        "present": true,
+        "timeLogged": "2025-03-15 08:05:33",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Environmental Awareness Day",
+        "date": "2025-04-22",
+        "present": true,
+        "timeLogged": "2025-04-22 11:01:30",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Sports Fest",
+        "date": "2025-05-10",
+        "present": true,
+        "timeLogged": "2025-05-10 12:51:53",
+        "loggedVia": "Manual"
+      },
+      {
+        "activity": "Values Formation Seminar",
+        "date": "2025-06-05",
+        "present": true,
+        "timeLogged": "2025-06-05 14:03:40",
+        "loggedVia": "Manual"
+      }
+    ]
+  }
+]

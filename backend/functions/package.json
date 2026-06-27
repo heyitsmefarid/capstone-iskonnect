@@ -1,0 +1,27 @@
+{
+  "name": "capstone-functions",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": "20"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "lint": "echo \"No lint configured\"",
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "seed:emulator": "node scripts/seedEmulator.js",
+    "seed:emulator:dry": "node scripts/seedEmulator.js --dry-run",
+    "seed:emulator:reset": "node scripts/seedEmulator.js --reset",
+    "seed:local": "npm run seed:emulator:reset",
+    "smoke:local": "node scripts/smokeCheck.js",
+    "emulators:seed": "npx -y firebase-tools@latest --config ../../firebase.json emulators:exec --project demo-capstone --only functions,firestore,storage,auth \"npm run seed:emulator:reset\"",
+    "emulators:smoke": "npx -y firebase-tools@latest --config ../../firebase.json emulators:exec --project demo-capstone --only functions,firestore,storage,auth \"node scripts/smokeCheck.js\""
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.1",
+    "firebase-functions": "^6.0.1",
+    "nodemailer": "^6.9.0",
+    "pdf-lib": "^1.17.1"
+  }
+}

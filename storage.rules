@@ -1,0 +1,40 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return signedIn() && request.auth.token.role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin') || hasRole('super_admin');
+    }
+
+    // The scholar app uses an app-generated student id (not the auth uid) and
+    // signs in anonymously, so any signed-in session may read/write these.
+    match /applications/{userId}/{allPaths=**} {
+      allow read, write: if signedIn();
+    }
+
+    match /requirements/{userId}/{allPaths=**} {
+      allow read, write: if signedIn();
+    }
+
+    match /academic-records/{userId}/{allPaths=**} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    match /public-announcements/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

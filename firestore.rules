@@ -1,0 +1,247 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return signedIn() && request.auth.token.role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin') || hasRole('super_admin');
+    }
+
+    function isStaff() {
+      return hasRole('staff');
+    }
+
+    function isAdminOrStaff() {
+      return isAdmin() || isStaff();
+    }
+
+    function isScholar() {
+      return hasRole('scholar');
+    }
+
+    function isApplicant() {
+      return hasRole('applicant');
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isSelfProfile(userId) {
+      return isOwner(userId) || isAdmin();
+    }
+
+    // ── Users ──────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if signedIn(); // Any authenticated session (incl. admin anonymous auth) can read
+      // The scholar app uses an app-generated document id (not the auth uid) and
+      // signs in anonymously, so any signed-in session may create/update its record.
+      allow create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /profiles/{userId} {
+      allow read: if isSelfProfile(userId) || isStaff();
+      allow create: if isOwner(userId) || isAdmin();
+      allow update: if isSelfProfile(userId);
+      allow delete: if isAdmin();
+    }
+
+    // ── Applications ───────────────────────────────────────
+    match /applications/{applicationId} {
+      allow read: if isAdminOrStaff() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid && resource.data.status in ['draft', 'rejected']);
+      // Staff can encode but not delete
+      allow delete: if isAdmin();
+
+      match /requirements/{requirementId} {
+        allow read: if isAdminOrStaff() || (signedIn() && get(/databases/$(database)/documents/applications/$(applicationId)).data.userId == request.auth.uid);
+        allow create: if signedIn() && get(/databases/$(database)/documents/applications/$(applicationId)).data.userId == request.auth.uid;
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ── BFCSP scholarship application forms (scholar app) ──
+    // The scholar app signs in anonymously and stores the userId as an
+    // app-generated id (not the auth uid), so — mirroring the /users rule — any
+    // signed-in session may create/update and read its own draft by id.
+    // Admins/staff read these to review and print the official application form.
+    match /scholarship_applications/{appId} {
+      allow read: if isAdminOrStaff() || signedIn();
+      allow create, update: if signedIn();
+      allow delete: if isAdmin();
+    }
+
+    // ── Scholarships ───────────────────────────────────────
+    match /scholarships/{scholarshipId} {
+      allow read: if isAdminOrStaff() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update: if isAdminOrStaff();
+      // Staff cannot delete saved records
+      allow delete: if isAdmin();
+    }
+
+    // ── Academic Records ───────────────────────────────────
+    match /academic_records/{recordId} {
+      allow read: if isAdminOrStaff() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update: if isAdminOrStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ── Attendance ─────────────────────────────────────────
+    match /attendance_events/{eventId} {
+      allow read: if signedIn();
+      allow write: if isAdminOrStaff();
+    }
+
+    match /attendance_logs/{logId} {
+      allow read: if isAdminOrStaff() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if signedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Announcements ──────────────────────────────────────
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      // Admin UI uses anonymous auth in this build, so allow any signed-in
+      // session to manage announcements.
+      allow create, update, delete: if signedIn();
+    }
+
+    // ── Direct Messages ────────────────────────────────────
+    // This build uses anonymous auth + app-generated user ids, so any signed-in
+    // session may read/write messages.
+    match /messages/{messageId} {
+      allow read, create, update: if signedIn();
+      allow delete: if signedIn();
+    }
+
+    // ── Group Chats ────────────────────────────────────────
+    // This build uses anonymous auth + app-generated user ids, so any signed-in
+    // session may read/manage group chats (mirrors the messages/announcements
+    // pattern). Messages are stored as an array field on the group doc.
+    match /group_chats/{groupId} {
+      allow read, create, update: if signedIn();
+      allow delete: if signedIn();
+
+      match /messages/{messageId} {
+        allow read, create, update, delete: if signedIn();
+      }
+    }
+
+    // ── Timeline & Audit ───────────────────────────────────
+    match /timeline_entries/{entryId} {
+      allow read: if isAdminOrStaff() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow write: if isAdminOrStaff();
+    }
+
+    match /audit_logs/{logId} {
+      // The admin/staff UI authenticates anonymously in this build, so allow any
+      // signed-in session to read the trail (the page itself is admin-only).
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if false; // Audit logs are immutable
+    }
+
+    // ── Reports ────────────────────────────────────────────
+    match /reports_cache/{reportId} {
+      allow read: if isAdminOrStaff();
+      allow write: if isAdmin();
+    }
+
+    // ── Notifications ──────────────────────────────────────
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdminOrStaff();
+      allow update: if signedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // ── System Settings (admin-managed, all authenticated can read) ────────
+    match /system_config/{docId} {
+      allow read: if signedIn();
+      // Admin UI uses anonymous auth in this build.
+      allow write: if signedIn();
+    }
+
+    // Admin UI uses anonymous auth in this build, so allow any signed-in session
+    // to manage the eligible schools/programs catalog (synced from System Settings).
+    match /schools/{docId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    match /programs/{docId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    match /scholarship_categories/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /scholarship_statuses/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /timeline_stages/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── School Years & Semesters ───────────────────────────
+    // Admin UI uses anonymous auth in this build, so allow any signed-in
+    // session to manage school years (mirrors users/announcements/messages).
+    // Semesters are stored as a nested array field on the school year doc.
+    match /school_years/{yearId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    // ── Evaluation ─────────────────────────────────────────
+    match /evaluation_rubrics/{docId} {
+      allow read: if isAdminOrStaff();
+      allow write: if isAdmin();
+    }
+
+    match /evaluation_scores/{docId} {
+      allow read: if isAdminOrStaff();
+      allow create, update: if isAdminOrStaff();
+      allow delete: if isAdmin();
+    }
+
+    // ── Activity Summaries ─────────────────────────────────
+    match /activity_summaries/{docId} {
+      allow read: if isAdminOrStaff();
+      allow write: if isAdmin();
+    }
+
+    // ── History (Archived Records) ─────────────────────────
+    // The admin/staff UI authenticates anonymously in this build, so allow any
+    // signed-in session to read/write the archive collections (the History pages
+    // themselves live behind the admin panel). Archiving never hard-deletes a
+    // user record — it writes a snapshot here and flags the user doc archived.
+    match /applicant_history/{historyId} {
+      allow read, create, update, delete: if signedIn();
+    }
+
+    match /scholar_history/{historyId} {
+      allow read, create, update, delete: if signedIn();
+    }
+
+    // ── Deny all other documents ───────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
