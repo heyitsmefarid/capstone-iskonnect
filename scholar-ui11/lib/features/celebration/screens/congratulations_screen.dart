@@ -169,14 +169,15 @@ class _CongratulationsScreenState extends ConsumerState<CongratulationsScreen> {
             color: AppColors.textPrimary,
           ),
         ).animate().fadeIn(duration: 400.ms),
-        const SizedBox(height: 18),
-        if (student.hasFullEvaluation)
+        if (student.hasFullEvaluation) ...[
+          const SizedBox(height: 18),
           ScoreRing(
             value: student.totalEvaluationScore!,
             max: 100,
             label: 'TOTAL EVALUATION SCORE',
             diameter: 92,
           ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0),
+        ],
         const SizedBox(height: 18),
         Wrap(
           spacing: 18,
