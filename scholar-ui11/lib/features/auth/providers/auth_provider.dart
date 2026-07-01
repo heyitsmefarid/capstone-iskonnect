@@ -644,6 +644,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _saveStudentToFirestoreSafely(updatedStudent);
   }
 
+  /// Marks the one-time approval celebration as seen for the current
+  /// student, persisting to Firestore so it never replays on another device
+  /// or after a reinstall.
+  Future<void> markCelebrationSeen() async {
+    if (state.student == null) return;
+
+    final updated = state.student!.copyWith(celebrationSeen: true);
+    state = state.copyWith(student: updated);
+    _registeredStudents[updated.id] = updated;
+    await _saveStudentsToStorage();
+    await _saveStudentToFirestoreSafely(updated);
+  }
+
   /// Persist submitted scholarship requirements to Firestore so the admin
   /// panel can see which documents the applicant has submitted.
   Future<void> saveApplicationRequirements(
