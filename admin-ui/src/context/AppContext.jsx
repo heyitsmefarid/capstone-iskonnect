@@ -229,6 +229,8 @@ const mapStudentToApplicant = (student) => {
     enrolledSemesters: Array.isArray(student.enrolledSemesters) ? student.enrolledSemesters : [],
     requirements: mapRequirements(student),
     examScore: student.examScore ?? null,
+    requirementsScore: student.requirementsScore ?? null,
+    economicScore: student.economicScore ?? null,
     interviewStatus: student.interviewStatus ?? null,
     gwa: student.gwa ?? null,
     semestersUsed: student.semestersUsed ?? 0,
