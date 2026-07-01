@@ -39,6 +39,14 @@ class StudentModel {
   final String?
   applicationStatus; // For applicants: 'pending', 'for_exam', 'for_interview', 'approved', 'rejected'
   final String? profilePicture; // Base64 encoded profile picture or URL
+  // Evaluation scores the admin records while reviewing an application —
+  // synced to Firestore by admin-ui's buildUserDocFromApplicant.
+  final int? requirementsScore; // 0-20
+  final int? economicScore; // 0-30
+  final double? examScore; // 0-100
+  // Set once the approval celebration screen has played for this account, so
+  // it never replays (any device — this travels with the Firestore doc).
+  final bool celebrationSeen;
 
   StudentModel({
     String? id,
@@ -70,6 +78,10 @@ class StudentModel {
         StudentType.applicant, // Default to applicant for new registrations
     this.applicationStatus = 'pending', // Default application status
     this.profilePicture,
+    this.requirementsScore,
+    this.economicScore,
+    this.examScore,
+    this.celebrationSeen = false,
   }) : scholarshipStatus =
            scholarshipStatus ??
            (studentType == StudentType.scholar ? 'Active' : 'Pending'),
@@ -136,6 +148,19 @@ class StudentModel {
   /// Check if student is an applicant
   bool get isApplicant => studentType == StudentType.applicant;
 
+  /// True once the admin has recorded all three evaluation scores.
+  bool get hasFullEvaluation =>
+      requirementsScore != null && economicScore != null && examScore != null;
+
+  /// Requirements + Economic + (Exam * 0.5), rounded and clamped to 0-100 —
+  /// matches the formula admin-ui's Applications.jsx already uses. Null until
+  /// [hasFullEvaluation] is true, since a partial total would be misleading.
+  int? get totalEvaluationScore {
+    if (!hasFullEvaluation) return null;
+    final total = requirementsScore! + economicScore! + (examScore! * 0.5);
+    return total.round().clamp(0, 100);
+  }
+
   StudentModel copyWith({
     String? id,
     String? firstName,
@@ -165,6 +190,10 @@ class StudentModel {
     StudentType? studentType,
     String? applicationStatus,
     String? profilePicture,
+    int? requirementsScore,
+    int? economicScore,
+    double? examScore,
+    bool? celebrationSeen,
   }) {
     return StudentModel(
       id: id ?? this.id,
@@ -195,6 +224,10 @@ class StudentModel {
       studentType: studentType ?? this.studentType,
       applicationStatus: applicationStatus ?? this.applicationStatus,
       profilePicture: profilePicture ?? this.profilePicture,
+      requirementsScore: requirementsScore ?? this.requirementsScore,
+      economicScore: economicScore ?? this.economicScore,
+      examScore: examScore ?? this.examScore,
+      celebrationSeen: celebrationSeen ?? this.celebrationSeen,
     );
   }
 
@@ -228,6 +261,10 @@ class StudentModel {
       'studentType': studentType.name,
       'applicationStatus': applicationStatus,
       'profilePicture': profilePicture,
+      'requirementsScore': requirementsScore,
+      'economicScore': economicScore,
+      'examScore': examScore,
+      'celebrationSeen': celebrationSeen,
     };
   }
 
@@ -273,6 +310,10 @@ class StudentModel {
           : StudentType.applicant,
       applicationStatus: json['applicationStatus']?.toString() ?? 'pending',
       profilePicture: json['profilePicture']?.toString(),
+      requirementsScore: (json['requirementsScore'] as num?)?.toInt(),
+      economicScore: (json['economicScore'] as num?)?.toInt(),
+      examScore: (json['examScore'] as num?)?.toDouble(),
+      celebrationSeen: json['celebrationSeen'] == true,
     );
   }
 }
