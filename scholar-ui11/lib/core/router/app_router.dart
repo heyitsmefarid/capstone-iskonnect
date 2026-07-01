@@ -23,6 +23,7 @@ import 'package:iskonnectttt/features/announcements/screens/announcements_screen
 import 'package:iskonnectttt/features/announcements/screens/announcement_detail_screen.dart';
 import 'package:iskonnectttt/features/messaging/screens/messaging_screen.dart';
 import 'package:iskonnectttt/features/scholarship_application/screens/scholarship_application_screen.dart';
+import 'package:iskonnectttt/features/celebration/screens/congratulations_screen.dart';
 import 'package:iskonnectttt/shared/widgets/main_shell.dart';
 
 // Provider to track only auth status changes (not profile updates)
@@ -36,12 +37,60 @@ final _authStatusProvider = Provider<({bool isLoggedIn, bool isInitialized})>((
   );
 });
 
+// Narrow provider so the celebration refresh only fires on the one
+// transition that matters (applicant -> scholar, or celebration
+// acknowledged) — not on every grade/attendance update to the student doc.
+final _celebrationStatusProvider = Provider<({bool isScholar, bool celebrationSeen})>((
+  ref,
+) {
+  final student = ref.watch(currentStudentProvider);
+  return (
+    isScholar: student?.isScholar ?? false,
+    celebrationSeen: student?.celebrationSeen ?? false,
+  );
+});
+
+/// Pure decision used by the router's redirect callback: where (if anywhere)
+/// to send the user based on celebration status. A standalone function so
+/// it's unit-testable without constructing a GoRouter/ProviderScope.
+String? celebrationRedirectTarget({
+  required bool celebrationPending,
+  required bool isCelebrating,
+}) {
+  if (celebrationPending && !isCelebrating) return '/celebration';
+  if (!celebrationPending && isCelebrating) return '/dashboard';
+  return null;
+}
+
+/// Notifies go_router to re-run `redirect` for the CURRENT location (without
+/// recreating the router or losing navigation state) whenever the scholar's
+/// celebration status changes — e.g. the admin approves them while they're
+/// mid-session on some other screen.
+class _CelebrationRefreshNotifier extends ChangeNotifier {
+  late final ProviderSubscription _subscription;
+
+  _CelebrationRefreshNotifier(Ref ref) {
+    _subscription = ref.listen(_celebrationStatusProvider, (previous, next) {
+      if (previous != next) notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription.close();
+    super.dispose();
+  }
+}
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authStatus = ref.watch(_authStatusProvider);
+  final celebrationRefresh = _CelebrationRefreshNotifier(ref);
+  ref.onDispose(celebrationRefresh.dispose);
 
   return GoRouter(
     initialLocation: '/splash',
     debugLogDiagnostics: true,
+    refreshListenable: celebrationRefresh,
     redirect: (context, state) {
       final isLoggedIn = authStatus.isLoggedIn;
       final isInitialized = authStatus.isInitialized;
@@ -75,12 +124,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return isLoggingIn ? null : '/login';
       }
 
-      // If logged in and trying to access login, redirect to dashboard
+      final celebration = ref.read(_celebrationStatusProvider);
+      final celebrationPending = celebration.isScholar && !celebration.celebrationSeen;
+      final isCelebrating = state.matchedLocation == '/celebration';
+
+      // If logged in and trying to access login, redirect to dashboard (or
+      // the celebration screen first, if it hasn't been seen yet).
       if (isLoggedIn && isLoggingIn) {
-        return '/dashboard';
+        return celebrationPending ? '/celebration' : '/dashboard';
       }
 
-      return null;
+      return celebrationRedirectTarget(
+        celebrationPending: celebrationPending,
+        isCelebrating: isCelebrating,
+      );
     },
     routes: [
       GoRoute(
@@ -115,6 +172,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/forgot-password',
         name: 'forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/celebration',
+        name: 'celebration',
+        builder: (context, state) => const CongratulationsScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
