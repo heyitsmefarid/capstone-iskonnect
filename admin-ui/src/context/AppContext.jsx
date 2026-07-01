@@ -267,6 +267,8 @@ const buildUserDocFromApplicant = (applicant) => {
     ...statusFields,
     scholarId: applicant.scholarId ?? null,
     examScore: applicant.examScore ?? null,
+    requirementsScore: applicant.requirementsScore ?? null,
+    economicScore: applicant.economicScore ?? null,
     interviewStatus: applicant.interviewStatus ?? null,
     ranking: applicant.ranking ?? null,
     gwa: applicant.gwa ?? null,
