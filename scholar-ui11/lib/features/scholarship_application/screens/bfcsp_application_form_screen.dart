@@ -104,7 +104,7 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
     'Education',
     'Family',
     'Preferences',
-    'Essay & Submit',
+    'Submit',
   ];
 
   @override
@@ -300,6 +300,8 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
     _app.essayAnswer = _essayCtrl.text.trim();
   }
 
+  static const _firestoreTimeout = Duration(seconds: 15);
+
   Future<void> _saveAsDraft() async {
     _syncToModel();
     setState(() => _loading = true);
@@ -308,16 +310,29 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
       _app.savedAt = DateTime.now().toIso8601String();
       final data = _app.toMap();
       if (_draftId != null) {
-        await FirebaseFirestore.instance.collection('scholarship_applications').doc(_draftId).set(data);
+        await FirebaseFirestore.instance
+            .collection('scholarship_applications')
+            .doc(_draftId)
+            .set(data)
+            .timeout(_firestoreTimeout);
       } else {
-        final ref = await FirebaseFirestore.instance.collection('scholarship_applications').add(data);
+        final ref = await FirebaseFirestore.instance
+            .collection('scholarship_applications')
+            .add(data)
+            .timeout(_firestoreTimeout);
         _draftId = ref.id;
       }
+      _showSnack('Draft saved.');
     } catch (_) {
-      // Firebase unavailable in this environment — draft saved locally only
+      // Firestore unreachable/timed out — the form data is still held in
+      // memory, but nothing was persisted, so say so instead of claiming
+      // success.
+      _showSnack(
+        'Could not save draft. Please check your connection and try again.',
+        error: true,
+      );
     }
-    _showSnack('Draft saved.');
-    setState(() => _loading = false);
+    if (mounted) setState(() => _loading = false);
   }
 
   Future<void> _submitApplication() async {
@@ -333,17 +348,27 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
     _app.savedAt = DateTime.now().toIso8601String();
     final data = _app.toMap();
 
-    // Attempt Firestore save; silently skip if Firebase is unavailable
+    // Attempt Firestore save; silently skip if Firebase is unavailable. Bounded
+    // by a timeout so an unreachable/hanging connection can't leave the UI
+    // stuck on the loading spinner forever.
     try {
       if (_draftId != null) {
-        await FirebaseFirestore.instance.collection('scholarship_applications').doc(_draftId).set(data);
+        await FirebaseFirestore.instance
+            .collection('scholarship_applications')
+            .doc(_draftId)
+            .set(data)
+            .timeout(_firestoreTimeout);
       } else {
-        await FirebaseFirestore.instance.collection('scholarship_applications').add(data);
+        await FirebaseFirestore.instance
+            .collection('scholarship_applications')
+            .add(data)
+            .timeout(_firestoreTimeout);
       }
     } catch (_) {
       // Firebase not configured in this environment — proceed with local submission
     }
 
+    if (!mounted) return;
     setState(() => _loading = false);
     if (mounted) {
       Navigator.of(context).pop(true);
@@ -542,7 +567,7 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
 
   Widget _buildNavButtons(ColorScheme cs) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: cs.surface,
         boxShadow: [BoxShadow(blurRadius: 4, color: Colors.black12)],
@@ -552,34 +577,43 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
           if (_currentStep > 0)
             OutlinedButton.icon(
               onPressed: _back,
-              icon: const Icon(Icons.arrow_back),
+              icon: const Icon(Icons.arrow_back, size: 16),
               label: const Text('Back'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
           const Spacer(),
           if (_currentStep < 4)
             FilledButton.icon(
               onPressed: _next,
-              icon: const Icon(Icons.arrow_forward),
+              icon: const Icon(Icons.arrow_forward, size: 16),
               label: const Text('Next'),
-              style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             )
           else ...[
-            // Applicants can preview their filled-out form at any time so they
-            // can verify every field is correct before submitting.
             Tooltip(
               message: 'Preview your filled-out application form',
-              child: OutlinedButton.icon(
+              child: IconButton.outlined(
                 onPressed: _loading ? null : _previewAndDownloadPdf,
                 icon: const Icon(Icons.picture_as_pdf_outlined),
-                label: const Text('Preview PDF'),
               ),
             ),
             const SizedBox(width: 8),
             FilledButton.icon(
               onPressed: _loading ? null : _submitApplication,
-              icon: const Icon(Icons.send),
+              icon: const Icon(Icons.send, size: 16),
               label: const Text('Submit'),
-              style: FilledButton.styleFrom(backgroundColor: Colors.green),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.green,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
           ],
         ],
@@ -1092,9 +1126,16 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
 
   Widget _row2(List<Widget> children) {
     return Row(
-      children: children
-          .map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 4), child: c)))
-          .toList(),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children.asMap().entries.map((e) {
+        final isLast = e.key == children.length - 1;
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: isLast ? 0 : 6),
+            child: e.value,
+          ),
+        );
+      }).toList(),
     );
   }
 }

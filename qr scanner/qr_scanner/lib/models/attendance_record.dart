@@ -50,6 +50,13 @@ class AttendanceRecord extends HiveObject {
   @HiveField(10)
   final String? programName;
 
+  /// Number of times a sync has been attempted for this record. Used to give
+  /// up on records that can never resolve (e.g. a scan for a scholar id that
+  /// doesn't exist yet) instead of retrying — and re-writing an audit log
+  /// entry for — them forever every 30 seconds.
+  @HiveField(11, defaultValue: 0)
+  int syncAttempts;
+
   AttendanceRecord({
     required this.id,
     required this.studentId,
@@ -62,6 +69,7 @@ class AttendanceRecord extends HiveObject {
     this.studentName,
     this.schoolName,
     this.programName,
+    this.syncAttempts = 0,
   });
 
   /// Creates a copy of this record with updated fields
@@ -77,6 +85,7 @@ class AttendanceRecord extends HiveObject {
     String? studentName,
     String? schoolName,
     String? programName,
+    int? syncAttempts,
   }) {
     return AttendanceRecord(
       id: id ?? this.id,
@@ -90,6 +99,7 @@ class AttendanceRecord extends HiveObject {
       studentName: studentName ?? this.studentName,
       schoolName: schoolName ?? this.schoolName,
       programName: programName ?? this.programName,
+      syncAttempts: syncAttempts ?? this.syncAttempts,
     );
   }
 
@@ -107,6 +117,7 @@ class AttendanceRecord extends HiveObject {
       'studentName': studentName,
       'schoolName': schoolName,
       'programName': programName,
+      'syncAttempts': syncAttempts,
     };
   }
 
@@ -126,6 +137,7 @@ class AttendanceRecord extends HiveObject {
       studentName: json['studentName'] as String?,
       schoolName: json['schoolName'] as String?,
       programName: json['programName'] as String?,
+      syncAttempts: json['syncAttempts'] as int? ?? 0,
     );
   }
 

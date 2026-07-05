@@ -50,8 +50,9 @@ class StorageService {
     // Create default admin if none exists
     await _ensureDefaultAdmin();
 
-    // Create default event if none exists
-    await _ensureDefaultEvent();
+    // Events are no longer seeded locally — they're fetched live from the
+    // admin-scheduled `events` Firestore collection (see EventsService) and
+    // cached into this same box for offline use.
   }
 
   /// Ensure a default admin exists
@@ -66,22 +67,6 @@ class StorageService {
       );
       await _adminBox.put(defaultAdmin.id, defaultAdmin);
       await _settingsBox.put('currentAdminId', defaultAdmin.id);
-    }
-  }
-
-  /// Ensure a default event exists
-  Future<void> _ensureDefaultEvent() async {
-    if (_eventsBox.isEmpty) {
-      final defaultEvent = Event(
-        id: _uuid.v4(),
-        name: 'General Attendance',
-        description: 'Default daily attendance tracking',
-        date: DateTime.now(),
-        isActive: true,
-        createdAt: DateTime.now(),
-      );
-      await _eventsBox.put(defaultEvent.id, defaultEvent);
-      await _settingsBox.put('currentEventId', defaultEvent.id);
     }
   }
 
@@ -169,6 +154,28 @@ class StorageService {
     }
   }
 
+  /// Record a failed sync attempt for a record that couldn't be resolved yet
+  /// (e.g. no matching scholar found). Returns the updated attempt count.
+  Future<int> incrementSyncAttempts(String recordId) async {
+    final record = _attendanceBox.get(recordId);
+    if (record == null) return 0;
+    record.syncAttempts += 1;
+    await record.save();
+    return record.syncAttempts;
+  }
+
+  /// Give up on a record that has exceeded the retry cap so it stops being
+  /// re-attempted (and re-billed against the Firestore write quota) forever.
+  Future<void> giveUpOnRecord(String recordId, {required String reason}) async {
+    final record = _attendanceBox.get(recordId);
+    if (record != null) {
+      record.isSynced = true;
+      record.syncedAt = DateTime.now();
+      record.notes = [record.notes, reason].whereType<String>().join(' — ');
+      await record.save();
+    }
+  }
+
   /// Delete synced records (cleanup after successful sync)
   Future<int> deleteSyncedRecords() async {
     final syncedRecords = _attendanceBox.values
@@ -193,21 +200,21 @@ class StorageService {
   }
 
   // ==================== EVENTS ====================
+  // Events are scheduled by the admin (admin-ui) and fetched live from
+  // Firestore by EventsService — this box only caches the latest fetch so
+  // the picker still works offline.
 
-  /// Add a new event
-  Future<Event> addEvent(Event event) async {
-    await _eventsBox.put(event.id, event);
-    return event;
+  /// Replace the cached event list with the latest fetch from Firestore.
+  Future<void> replaceEventsCache(List<Event> events) async {
+    await _eventsBox.clear();
+    for (final event in events) {
+      await _eventsBox.put(event.id, event);
+    }
   }
 
-  /// Get all events
+  /// Get all cached events
   List<Event> getAllEvents() {
     return _eventsBox.values.toList();
-  }
-
-  /// Get active events
-  List<Event> getActiveEvents() {
-    return _eventsBox.values.where((event) => event.isActive).toList();
   }
 
   /// Get event by ID
@@ -215,19 +222,14 @@ class StorageService {
     return _eventsBox.get(id);
   }
 
-  /// Update an event
-  Future<void> updateEvent(Event event) async {
-    await _eventsBox.put(event.id, event);
-  }
-
-  /// Delete an event
-  Future<void> deleteEvent(String id) async {
-    await _eventsBox.delete(id);
-  }
-
   /// Set current event
   Future<void> setCurrentEvent(String eventId) async {
     await _settingsBox.put('currentEventId', eventId);
+  }
+
+  /// Clear the current event selection (e.g. it was deleted by the admin)
+  Future<void> clearCurrentEvent() async {
+    await _settingsBox.delete('currentEventId');
   }
 
   /// Get current event ID
@@ -301,7 +303,7 @@ class StorageService {
   Future<void> clearAllData() async {
     await _attendanceBox.clear();
     await _eventsBox.clear();
-    await _ensureDefaultEvent();
+    await _settingsBox.delete('currentEventId');
   }
 
   /// Close all boxes

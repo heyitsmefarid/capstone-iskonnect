@@ -15,6 +15,17 @@ const userRoleSync = onDocumentWritten('users/{userId}', async (event) => {
     return;
   }
 
+  // Only re-sync when the role actually changed. Without this check, every
+  // unrelated write to a user doc (e.g. the QR scanner appending an
+  // attendance entry) re-fires this trigger and writes an unchanged role to
+  // `profiles`, doubling that write's cost against the Firestore quota for
+  // no reason.
+  const before = event.data.before?.data();
+  const previousRole = before ? normalizeRole(before.role) : null;
+  if (previousRole === role) {
+    return;
+  }
+
   const { auth, db, fieldValue } = getFirebaseAdmin();
   await auth.setCustomUserClaims(event.params.userId, { role });
 

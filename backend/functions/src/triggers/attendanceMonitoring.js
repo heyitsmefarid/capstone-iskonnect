@@ -11,6 +11,16 @@ const attendanceMonitoring = onDocumentWritten(
       return;
     }
 
+    // The QR scanner writes each scan to a deterministic doc id and retries
+    // (via a merge) if the scholar record wasn't resolvable yet. Only treat
+    // the first write as a new attendance event — otherwise every retry of
+    // the same scan re-touches `profiles` and adds another `timeline_entries`
+    // doc for something that already happened.
+    const before = event.data.before?.data();
+    if (before) {
+      return;
+    }
+
     const { db, fieldValue } = getFirebaseAdmin();
     const scholarDocId = String(after.scholarId || after.userId || 'unknown');
 

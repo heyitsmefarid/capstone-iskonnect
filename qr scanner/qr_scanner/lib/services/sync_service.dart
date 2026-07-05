@@ -49,6 +49,15 @@ class SyncService extends ChangeNotifier {
   // Auto-sync interval (check every 30 seconds when online)
   static const Duration _syncInterval = Duration(seconds: 30);
 
+  // Don't let two sync triggers (timer, connectivity flap, post-scan) fire
+  // back-to-back — connectivity_plus is known to flap on web.
+  static const Duration _minRetryGap = Duration(seconds: 5);
+
+  // Give up on a record that can't resolve to a scholar after this many
+  // attempts, instead of re-writing an audit log entry for it every 30
+  // seconds forever (this is what was exhausting the Firestore write quota).
+  static const int _maxSyncAttempts = 10;
+
   /// Whether sync is in progress
   bool get isSyncing => _isSyncing;
 
@@ -76,10 +85,17 @@ class SyncService extends ChangeNotifier {
 
   /// Handle connectivity changes
   void _onConnectivityChange() {
-    if (_connectivityService.isOnline && _storageService.isAutoSyncEnabled()) {
-      // Trigger sync when coming online
-      syncNow();
+    if (!_connectivityService.isOnline || !_storageService.isAutoSyncEnabled()) {
+      return;
     }
+    // connectivity_plus is known to flap rapidly on web even with a working
+    // connection — without this guard, every flap re-triggers a full sync
+    // pass over all pending records.
+    final lastAttempt = _lastSyncAttempt;
+    if (lastAttempt != null && DateTime.now().difference(lastAttempt) < _minRetryGap) {
+      return;
+    }
+    syncNow();
   }
 
   /// Start the auto-sync timer. Attempts a sync on every tick regardless of the
@@ -197,8 +213,9 @@ class SyncService extends ChangeNotifier {
 
       try {
         // 1. Audit log / scholar-app fallback lookup (any id, never creates a
-        //    bogus user doc).
-        await db.collection('attendance_logs').add({
+        //    bogus user doc). Keyed by the local record id so a retry
+        //    overwrites the same doc instead of creating a new one each time.
+        await db.collection('attendance_logs').doc(record.id).set({
           'userId': scholarId,
           'scholarId': scholarId,
           'eventName': record.eventName,
@@ -214,27 +231,48 @@ class SyncService extends ChangeNotifier {
           'program': record.programName,
           'localId': record.id,
           'createdAt': FieldValue.serverTimestamp(),
-        }).timeout(const Duration(seconds: 12));
+        }, SetOptions(merge: true)).timeout(const Duration(seconds: 12));
 
         // 2. Append to the scholar's user document attendance array — the
         //    primary source the admin evaluation and scholar dashboard read.
         //    Resolve the doc by id first; if the QR carried the admin scholarId
         //    instead, fall back to a lookup. Never create a junk user doc.
         final userRef = await _resolveUserRef(db, scholarId);
-        if (userRef != null) {
-          await userRef.set({
-            'attendance': FieldValue.arrayUnion([
-              {
-                'activity': record.eventName,
-                'eventName': record.eventName,
-                'present': true,
-                'status': 'present',
-                'date': scannedAtIso,
-                'markedVia': 'qr_scanner',
-              }
-            ]),
-          }, SetOptions(merge: true)).timeout(const Duration(seconds: 12));
+        if (userRef == null) {
+          // No matching scholar to attribute this scan to yet. The audit log
+          // entry above is written, but the scholar's own `attendance` array
+          // — what absence/termination logic actually reads — never got the
+          // entry. Retry a bounded number of times (in case the scholar
+          // record shows up shortly); after that, give up instead of
+          // re-attempting — and re-billing a Firestore write for — this scan
+          // every 30 seconds forever.
+          final attempts = await _storageService.incrementSyncAttempts(record.id);
+          if (attempts >= _maxSyncAttempts) {
+            await _storageService.giveUpOnRecord(
+              record.id,
+              reason: 'No scholar found for id "$scholarId" after $attempts attempts',
+            );
+            if (kDebugMode) {
+              print('Giving up on record ${record.id}: no scholar found for id "$scholarId".');
+            }
+          } else if (kDebugMode) {
+            print('No scholar found for id "$scholarId" — will retry sync ($attempts/$_maxSyncAttempts).');
+          }
+          continue;
         }
+
+        await userRef.set({
+          'attendance': FieldValue.arrayUnion([
+            {
+              'activity': record.eventName,
+              'eventName': record.eventName,
+              'present': true,
+              'status': 'present',
+              'date': scannedAtIso,
+              'markedVia': 'qr_scanner',
+            }
+          ]),
+        }, SetOptions(merge: true)).timeout(const Duration(seconds: 12));
 
         syncedIds.add(record.id);
       } catch (e) {
