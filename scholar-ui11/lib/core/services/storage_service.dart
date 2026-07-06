@@ -3,9 +3,9 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
-/// Uploads applicant/scholar requirement files to **Cloudinary** (free tier, no
-/// backend / no Blaze plan needed) and returns a public delivery URL the admin
-/// panel can view or download.
+/// Uploads files to **Cloudinary** (free tier, no backend / no Blaze plan
+/// needed) and returns a public delivery URL. Used for applicant/scholar
+/// requirement files (COR/COG/ID pictures) and for chat/message attachments.
 ///
 /// Uses an *unsigned* upload preset, so the file is sent straight from the app
 /// with no signature/secret — the preset (`capstone`) defines what's allowed.
@@ -22,15 +22,19 @@ class StorageService {
   /// 10 MB per file, and this keeps uploads quick on mobile data.
   static const int maxFileBytes = 10 * 1024 * 1024;
 
-  /// Uploads [bytes] and returns the public URL, or null if the file is empty /
-  /// too large / the upload fails. Accepts any file type.
-  static Future<String?> uploadRequirementFile({
-    required String studentId,
-    required String requirementId,
+  /// Whether a file of this size can be uploaded (non-empty, at or under the
+  /// cap). Checked client-side before attempting a network call.
+  static bool isFileSizeAllowed(int bytes) {
+    return bytes > 0 && bytes <= maxFileBytes;
+  }
+
+  /// Uploads [bytes] under [fileName] and returns the public URL, or null if
+  /// the file is empty / too large / the upload fails. Accepts any file type.
+  static Future<String?> uploadFile({
     required String fileName,
     required Uint8List bytes,
   }) async {
-    if (bytes.lengthInBytes == 0 || bytes.lengthInBytes > maxFileBytes) {
+    if (!isFileSizeAllowed(bytes.lengthInBytes)) {
       return null;
     }
 
@@ -56,5 +60,17 @@ class StorageService {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Thin wrapper kept for the existing requirement-upload call sites —
+  /// `studentId`/`requirementId` aren't used in the upload itself (Cloudinary
+  /// doesn't need them), they're just caller-side context.
+  static Future<String?> uploadRequirementFile({
+    required String studentId,
+    required String requirementId,
+    required String fileName,
+    required Uint8List bytes,
+  }) {
+    return uploadFile(fileName: fileName, bytes: bytes);
   }
 }
