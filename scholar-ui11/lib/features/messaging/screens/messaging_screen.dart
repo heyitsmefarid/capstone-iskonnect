@@ -6,9 +6,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/core/utils/formatters.dart';
+import 'package:iskonnectttt/core/models/group_chat_model.dart';
 import 'dart:typed_data';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:iskonnectttt/core/models/group_chat_model.dart';
 import 'package:iskonnectttt/core/models/message_attachment_model.dart';
 import 'package:iskonnectttt/core/services/storage_service.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
@@ -576,8 +576,12 @@ class _AttachmentLink extends StatelessWidget {
   }
 
   Future<void> _download(BuildContext context) async {
+    // Cloudinary doesn't send Content-Disposition: attachment by default, so
+    // a plain link often just opens the file inline instead of downloading
+    // it. The fl_attachment delivery flag forces a real download.
+    final downloadUrl = attachment.url.replaceFirst('/upload/', '/upload/fl_attachment/');
     final ok = await launchUrl(
-      Uri.parse(attachment.url),
+      Uri.parse(downloadUrl),
       mode: LaunchMode.externalApplication,
     );
     if (!ok && context.mounted) {

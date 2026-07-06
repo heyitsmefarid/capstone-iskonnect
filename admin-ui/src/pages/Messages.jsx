@@ -23,6 +23,11 @@ const MESSAGE_NOTIFICATION_KEY = 'ced_unread_messages';
 // Statuses that qualify as "scholars" (not applicants)
 const SCHOLAR_STATUSES = ['approved', 'active', 'on-hold', 'graduated', 'terminated'];
 
+// Cloudinary doesn't send Content-Disposition: attachment by default, so a
+// plain link often just opens the file inline instead of downloading it.
+// The fl_attachment delivery flag forces a real download.
+const toDownloadUrl = (url) => url.replace('/upload/', '/upload/fl_attachment/');
+
 export default function Messages() {
   const {
     applicants,
@@ -352,6 +357,11 @@ export default function Messages() {
           text: `"${file.name}" could not be uploaded. It was not sent.`,
         });
       }
+    }
+
+    if (!text && uploaded.length === 0) {
+      setIsSending(false);
+      return;
     }
 
     const messageText = text || '📎 Sent an attachment';
@@ -689,7 +699,7 @@ export default function Messages() {
                     {(msg.attachments || []).map((a, i) => (
                       <a
                         key={i}
-                        href={a.url}
+                        href={toDownloadUrl(a.url)}
                         download={a.name}
                         className="attachment-link"
                       >
