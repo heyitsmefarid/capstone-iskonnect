@@ -1,5 +1,7 @@
 import 'package:uuid/uuid.dart';
 
+import 'package:iskonnectttt/core/models/message_attachment_model.dart';
+
 /// Represents a participant in a group chat
 class GroupChatMember {
   final String id;
@@ -82,8 +84,7 @@ class GroupChatMessage {
   final String senderName;
   final String content;
   final DateTime timestamp;
-  final String? attachmentUrl;
-  final String? attachmentName;
+  final List<MessageAttachment> attachments;
   final List<String> readBy;
   final bool isSystemMessage;
 
@@ -93,14 +94,13 @@ class GroupChatMessage {
     required this.senderName,
     required this.content,
     DateTime? timestamp,
-    this.attachmentUrl,
-    this.attachmentName,
+    this.attachments = const [],
     this.readBy = const [],
     this.isSystemMessage = false,
   }) : id = id ?? const Uuid().v4(),
        timestamp = timestamp ?? DateTime.now();
 
-  bool get hasAttachment => attachmentUrl != null;
+  bool get hasAttachment => attachments.isNotEmpty;
 
   String get senderInitials {
     final parts = senderName.split(' ');
@@ -116,8 +116,7 @@ class GroupChatMessage {
     String? senderName,
     String? content,
     DateTime? timestamp,
-    String? attachmentUrl,
-    String? attachmentName,
+    List<MessageAttachment>? attachments,
     List<String>? readBy,
     bool? isSystemMessage,
   }) {
@@ -127,8 +126,7 @@ class GroupChatMessage {
       senderName: senderName ?? this.senderName,
       content: content ?? this.content,
       timestamp: timestamp ?? this.timestamp,
-      attachmentUrl: attachmentUrl ?? this.attachmentUrl,
-      attachmentName: attachmentName ?? this.attachmentName,
+      attachments: attachments ?? this.attachments,
       readBy: readBy ?? this.readBy,
       isSystemMessage: isSystemMessage ?? this.isSystemMessage,
     );
@@ -141,8 +139,7 @@ class GroupChatMessage {
       'senderName': senderName,
       'content': content,
       'timestamp': timestamp.toIso8601String(),
-      'attachmentUrl': attachmentUrl,
-      'attachmentName': attachmentName,
+      'attachments': MessageAttachment.listToJson(attachments),
       'readBy': readBy,
       'isSystemMessage': isSystemMessage,
     };
@@ -155,8 +152,7 @@ class GroupChatMessage {
       senderName: json['senderName'],
       content: json['content'],
       timestamp: DateTime.parse(json['timestamp']),
-      attachmentUrl: json['attachmentUrl'],
-      attachmentName: json['attachmentName'],
+      attachments: MessageAttachment.listFromJson(json['attachments'] as List?),
       readBy: List<String>.from(json['readBy'] ?? []),
       isSystemMessage: json['isSystemMessage'] ?? false,
     );

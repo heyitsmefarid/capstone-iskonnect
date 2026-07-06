@@ -1,11 +1,12 @@
+import 'message_attachment_model.dart';
+
 class MessageModel {
   final String id;
   final String content;
   final DateTime timestamp;
   final bool isFromStudent;
   final String status; // Sent, Seen, Replied
-  final String? attachmentUrl;
-  final String? attachmentName;
+  final List<MessageAttachment> attachments;
 
   MessageModel({
     required this.id,
@@ -13,14 +14,13 @@ class MessageModel {
     required this.timestamp,
     required this.isFromStudent,
     this.status = 'Sent',
-    this.attachmentUrl,
-    this.attachmentName,
+    this.attachments = const [],
   });
 
   bool get isSent => status == 'Sent';
   bool get isSeen => status == 'Seen';
   bool get isReplied => status == 'Replied';
-  bool get hasAttachment => attachmentUrl != null;
+  bool get hasAttachment => attachments.isNotEmpty;
 
   MessageModel copyWith({
     String? id,
@@ -28,8 +28,7 @@ class MessageModel {
     DateTime? timestamp,
     bool? isFromStudent,
     String? status,
-    String? attachmentUrl,
-    String? attachmentName,
+    List<MessageAttachment>? attachments,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -37,8 +36,7 @@ class MessageModel {
       timestamp: timestamp ?? this.timestamp,
       isFromStudent: isFromStudent ?? this.isFromStudent,
       status: status ?? this.status,
-      attachmentUrl: attachmentUrl ?? this.attachmentUrl,
-      attachmentName: attachmentName ?? this.attachmentName,
+      attachments: attachments ?? this.attachments,
     );
   }
 
@@ -49,8 +47,7 @@ class MessageModel {
       'timestamp': timestamp.toIso8601String(),
       'isFromStudent': isFromStudent,
       'status': status,
-      'attachmentUrl': attachmentUrl,
-      'attachmentName': attachmentName,
+      'attachments': MessageAttachment.listToJson(attachments),
     };
   }
 
@@ -61,8 +58,7 @@ class MessageModel {
       timestamp: DateTime.parse(json['timestamp']),
       isFromStudent: json['isFromStudent'],
       status: json['status'] ?? 'Sent',
-      attachmentUrl: json['attachmentUrl'],
-      attachmentName: json['attachmentName'],
+      attachments: MessageAttachment.listFromJson(json['attachments'] as List?),
     );
   }
 }

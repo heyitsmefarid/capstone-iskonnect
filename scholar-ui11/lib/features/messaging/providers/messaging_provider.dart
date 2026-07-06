@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iskonnectttt/core/models/group_chat_model.dart';
+import 'package:iskonnectttt/core/models/message_attachment_model.dart';
 import 'package:iskonnectttt/core/models/message_model.dart';
 import 'package:iskonnectttt/core/services/scholar_firestore_service.dart';
 import 'package:uuid/uuid.dart';
@@ -27,22 +28,20 @@ class MessagingNotifier extends StateNotifier<List<MessageModel>> {
           timestamp: ScholarFirestoreService.parseDateTime(record['createdAt'] ?? record['timestamp']),
           isFromStudent: fromUserId == studentId,
           status: record['status']?.toString() ?? (fromUserId == studentId ? 'Sent' : 'Seen'),
-          attachmentUrl: record['attachmentUrl']?.toString(),
-          attachmentName: record['attachmentName']?.toString(),
+          attachments: MessageAttachment.listFromJson(record['attachments'] as List?),
         );
       }).toList();
     } catch (_) {}
   }
 
-  void sendMessage(String content, {String? attachmentUrl, String? attachmentName}) {
+  void sendMessage(String content, {List<MessageAttachment> attachments = const []}) {
     final message = MessageModel(
       id: const Uuid().v4(),
       content: content,
       timestamp: DateTime.now(),
       isFromStudent: true,
       status: 'Sent',
-      attachmentUrl: attachmentUrl,
-      attachmentName: attachmentName,
+      attachments: attachments,
     );
 
     state = [...state, message];
@@ -65,6 +64,7 @@ class MessagingNotifier extends StateNotifier<List<MessageModel>> {
         toUserId: 'admin',
         body: message.content,
         subject: 'Scholar Inquiry',
+        attachments: message.attachments,
       );
     } catch (_) {
       // Local state already has the message.
@@ -187,6 +187,7 @@ class GroupChatsNotifier extends StateNotifier<List<GroupChat>> {
               senderName: map['sender']?.toString() ?? 'Unknown',
               content: map['text']?.toString() ?? '',
               timestamp: ScholarFirestoreService.parseDateTime(map['timestamp']),
+              attachments: MessageAttachment.listFromJson(map['attachments'] as List?),
             ))
         .toList()
       ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
@@ -215,7 +216,7 @@ class GroupChatsNotifier extends StateNotifier<List<GroupChat>> {
   }
 
   void sendGroupMessage(String groupId, String content,
-      {String? attachmentUrl, String? attachmentName}) {
+      {List<MessageAttachment> attachments = const []}) {
     final myId = _myId;
     if (myId == null) return;
 
@@ -232,8 +233,7 @@ class GroupChatsNotifier extends StateNotifier<List<GroupChat>> {
         senderName: _myName,
         content: content,
         timestamp: timestamp,
-        attachmentUrl: attachmentUrl,
-        attachmentName: attachmentName,
+        attachments: attachments,
       );
       return group.copyWith(messages: [...group.messages, newMessage]);
     }).toList();
@@ -245,6 +245,7 @@ class GroupChatsNotifier extends StateNotifier<List<GroupChat>> {
       senderId: myId,
       text: content,
       timestamp: timestamp.toIso8601String(),
+      attachments: attachments,
     );
   }
 

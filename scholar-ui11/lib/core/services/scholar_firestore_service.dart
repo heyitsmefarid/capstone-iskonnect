@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iskonnectttt/core/constants/firebase_env.dart';
+import 'package:iskonnectttt/core/models/message_attachment_model.dart';
 
 class ScholarFirestoreService {
   const ScholarFirestoreService._();
@@ -77,26 +78,29 @@ class ScholarFirestoreService {
     } catch (_) {}
   }
 
-  /// Reads the active academic year + semester set by the admin.
-  static Future<Map<String, String>> fetchActiveAcademicPeriod() async {
+  /// Live stream of the active academic year + semester so a scholar already
+  /// signed in sees the term switch — and everything keyed off it (current-
+  /// term grades, attendance, announcements) reset — the moment the admin
+  /// changes it, without needing to reopen the app.
+  static Stream<Map<String, String>> activeAcademicPeriodStream() async* {
     await _ensureAuth();
     final firestore = _firestore;
-    if (firestore == null) return {};
-    try {
-      final snap = await firestore
-          .collection('system_config')
-          .doc('academic')
-          .get()
-          .timeout(const Duration(seconds: 8));
+    if (firestore == null) {
+      yield const {};
+      return;
+    }
+    yield* firestore
+        .collection('system_config')
+        .doc('academic')
+        .snapshots()
+        .map((snap) {
       final data = snap.data();
-      if (data == null) return {};
+      if (data == null) return <String, String>{};
       return {
         'schoolYear': data['activeSchoolYear']?.toString() ?? '',
         'semester': data['activeSemester']?.toString() ?? '',
       };
-    } catch (_) {
-      return {};
-    }
+    });
   }
 
   static Future<List<Map<String, dynamic>>> fetchAttendanceLogs(String studentId) async {
@@ -209,6 +213,22 @@ class ScholarFirestoreService {
         .map((snap) => snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
   }
 
+  /// Live stream of scheduled events (admin writes, scholar app reads),
+  /// soonest first, so newly-scheduled events appear without restarting.
+  static Stream<List<Map<String, dynamic>>> eventsStream() async* {
+    await _ensureAuth();
+    final firestore = _firestore;
+    if (firestore == null) {
+      yield const [];
+      return;
+    }
+    yield* firestore
+        .collection('events')
+        .orderBy('date')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+  }
+
   static Future<List<Map<String, dynamic>>> fetchMessages(String studentId) async {
     await _ensureAuth();
     final firestore = _firestore;
@@ -243,6 +263,7 @@ class ScholarFirestoreService {
     required String toUserId,
     required String body,
     String? subject,
+    List<MessageAttachment> attachments = const [],
   }) async {
     await _ensureAuth();
     final firestore = _firestore;
@@ -255,6 +276,7 @@ class ScholarFirestoreService {
         'body': body,
         'createdAt': DateTime.now().toIso8601String(),
         'readBy': [fromUserId],
+        'attachments': MessageAttachment.listToJson(attachments),
       }).timeout(const Duration(seconds: 10));
     } catch (_) {}
   }
@@ -277,7 +299,8 @@ class ScholarFirestoreService {
   }
 
   /// Appends a message to a group's `messages` array field, matching the exact
-  /// shape the admin UI writes and reads: { id, sender, senderId, text, timestamp }.
+  /// shape the admin UI writes and reads: { id, sender, senderId, text,
+  /// timestamp, attachments }.
   static Future<void> sendGroupMessage({
     required String groupId,
     required String messageId,
@@ -285,6 +308,7 @@ class ScholarFirestoreService {
     required String senderId,
     required String text,
     required String timestamp,
+    List<MessageAttachment> attachments = const [],
   }) async {
     await _ensureAuth();
     final firestore = _firestore;
@@ -298,6 +322,7 @@ class ScholarFirestoreService {
             'senderId': senderId,
             'text': text,
             'timestamp': timestamp,
+            'attachments': MessageAttachment.listToJson(attachments),
           },
         ]),
       }).timeout(const Duration(seconds: 10));
@@ -328,6 +353,25 @@ class ScholarFirestoreService {
       }
     } catch (_) {}
     return result;
+  }
+
+  /// Updates a single requirement entry on the student's user document using a
+  /// dotted field path so other requirement keys are not overwritten.
+  static Future<void> updateStudentRequirement(
+    String studentId,
+    String requirementKey,
+    Map<String, dynamic> data,
+  ) async {
+    await _ensureAuth();
+    final firestore = _firestore;
+    if (firestore == null) return;
+    try {
+      await firestore
+          .collection('users')
+          .doc(studentId)
+          .update({'requirements.$requirementKey': data})
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {}
   }
 
   static Future<List<String>> fetchSchools() async {
