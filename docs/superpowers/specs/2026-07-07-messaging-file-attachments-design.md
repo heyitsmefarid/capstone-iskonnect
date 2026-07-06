@@ -129,10 +129,14 @@ objects), written the same way.
   failure marks just that chip as errored (with a retry tap) and does not
   block sending the message with whichever files succeeded, plus the text.
 - Message bubbles (both Direct and Group) render each `attachments` entry
-  as a tappable row below the message text — file-type icon (derived from
-  the name's extension, matching the existing image-vs-document icon
-  logic) + name + tap-to-open via `url_launcher`, matching the existing
-  file-open pattern used elsewhere in the app.
+  as a row below the message text — file-type icon (derived from the
+  name's extension, matching the existing image-vs-document icon logic) +
+  name + an explicit **Download** action (`url_launcher` with
+  `LaunchMode.externalApplication`, matching the existing
+  `_openFileUrl`/"Open file" pattern used elsewhere in the app — on
+  mobile this hands the file to the OS to save/open with the
+  appropriate app; on web it triggers a browser download), not just a
+  tap-the-row affordance.
 
 ### admin-ui — `Messages.jsx` (shared composer for Direct + Group threads)
 
@@ -144,8 +148,11 @@ objects), written the same way.
   before calling `sendGroupMessage`/`sendDirectMessage` with the resulting
   `attachments` array; the send button shows a brief busy state during
   upload.
-- Each message bubble renders its `attachments` as small clickable links
-  (file name, opens in a new tab) alongside the existing text/meta line.
+- Each message bubble renders its `attachments` as small **Download**
+  links (file name + download icon, `<a href={url} download={name}>` —
+  matching the existing View/Download link pattern used in the
+  Applications requirements list) alongside the existing text/meta line,
+  so clicking one saves the file rather than just navigating to it.
 
 ## Error Handling
 
