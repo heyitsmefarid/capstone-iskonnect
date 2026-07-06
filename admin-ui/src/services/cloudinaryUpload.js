@@ -13,18 +13,6 @@ export function isFileSizeAllowed(bytes) {
   return bytes > 0 && bytes <= MAX_FILE_BYTES;
 }
 
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif'];
-
-// Cloudinary's `auto` upload classifies PDFs under the `image` resource type,
-// which this account's security settings block from public delivery (401
-// "deny or ACL failure"). Non-image files are uploaded as `raw` instead,
-// which isn't subject to that restriction.
-function resourceTypeFor(file) {
-  if (file.type && file.type.startsWith('image/')) return 'image';
-  const ext = (file.name.split('.').pop() || '').toLowerCase();
-  return IMAGE_EXTENSIONS.includes(ext) ? 'image' : 'raw';
-}
-
 /**
  * Uploads a browser File to Cloudinary and returns its public URL, or null
  * if the file is empty/too large or the upload fails.
@@ -42,7 +30,7 @@ export async function uploadFile(file) {
     formData.append('upload_preset', UPLOAD_PRESET);
 
     const res = await fetch(
-      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceTypeFor(file)}/upload`,
+      `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`,
       { method: 'POST', body: formData }
     );
 

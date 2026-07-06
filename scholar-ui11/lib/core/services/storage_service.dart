@@ -28,20 +28,6 @@ class StorageService {
     return bytes > 0 && bytes <= maxFileBytes;
   }
 
-  static const Set<String> _imageExtensions = {
-    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif',
-  };
-
-  // Cloudinary's `auto` upload classifies PDFs under the `image` resource
-  // type, which this account's security settings block from public delivery
-  // (401 "deny or ACL failure"). Non-image files are uploaded as `raw`
-  // instead, which isn't subject to that restriction.
-  static String _resourceTypeFor(String fileName) {
-    final dot = fileName.lastIndexOf('.');
-    final ext = dot == -1 ? '' : fileName.substring(dot + 1).toLowerCase();
-    return _imageExtensions.contains(ext) ? 'image' : 'raw';
-  }
-
   /// Uploads [bytes] under [fileName] and returns the public URL, or null if
   /// the file is empty / too large / the upload fails. Accepts any file type.
   static Future<String?> uploadFile({
@@ -54,9 +40,8 @@ class StorageService {
 
     try {
       final safeName = fileName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final resourceType = _resourceTypeFor(safeName);
       final uri = Uri.parse(
-        'https://api.cloudinary.com/v1_1/$_cloudName/$resourceType/upload',
+        'https://api.cloudinary.com/v1_1/$_cloudName/auto/upload',
       );
 
       final request = http.MultipartRequest('POST', uri)
