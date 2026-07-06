@@ -6,7 +6,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/core/utils/formatters.dart';
+import 'dart:typed_data';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:iskonnectttt/core/models/group_chat_model.dart';
+import 'package:iskonnectttt/core/models/message_attachment_model.dart';
+import 'package:iskonnectttt/core/services/storage_service.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:iskonnectttt/features/messaging/providers/messaging_provider.dart';
 import 'package:iskonnectttt/shared/widgets/loading_widget.dart';
@@ -308,6 +312,7 @@ class _MessagingScreenState extends ConsumerState<MessagingScreen>
                       time: message.timestamp,
                       isFromUser: isFromUser,
                       status: message.status,
+                      attachments: message.attachments,
                     );
                   },
                 ),
@@ -327,14 +332,10 @@ class _MessagingScreenState extends ConsumerState<MessagingScreen>
             ],
           ),
           child: _MessageInput(
-            onSend: (message, {String? attachmentUrl, String? attachmentName}) {
+            onSend: (message, {required attachments}) async {
               ref
                   .read(messagesProvider.notifier)
-                  .sendMessage(
-                    message,
-                    attachmentUrl: attachmentUrl,
-                    attachmentName: attachmentName,
-                  );
+                  .sendMessage(message, attachments: attachments);
             },
           ),
         ),
@@ -559,17 +560,82 @@ class _MessagingScreenState extends ConsumerState<MessagingScreen>
   }
 }
 
+/// A received attachment shown inside a message bubble: name + an explicit
+/// Download action (not just tap-to-open) via url_launcher.
+class _AttachmentLink extends StatelessWidget {
+  final MessageAttachment attachment;
+  final bool isFromUser;
+
+  const _AttachmentLink({required this.attachment, required this.isFromUser});
+
+  bool get _isImage {
+    final ext = attachment.name.contains('.')
+        ? attachment.name.split('.').last.toLowerCase()
+        : '';
+    return ['jpg', 'jpeg', 'png', 'gif'].contains(ext);
+  }
+
+  Future<void> _download(BuildContext context) async {
+    final ok = await launchUrl(
+      Uri.parse(attachment.url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the file.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = isFromUser ? Colors.white : AppColors.textPrimary;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: InkWell(
+        onTap: () => _download(context),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _isImage ? Icons.image : Icons.insert_drive_file,
+              size: 14,
+              color: textColor,
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                attachment.name,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: textColor,
+                  decoration: TextDecoration.underline,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.download_rounded, size: 14, color: textColor),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MessageBubble extends StatelessWidget {
   final String message;
   final DateTime time;
   final bool isFromUser;
   final String status;
+  final List<MessageAttachment> attachments;
 
   const _MessageBubble({
     required this.message,
     required this.time,
     required this.isFromUser,
     required this.status,
+    this.attachments = const [],
   });
 
   IconData _getStatusIcon() {
@@ -651,6 +717,9 @@ class _MessageBubble extends StatelessWidget {
                       height: 1.4,
                     ),
                   ),
+                  ...attachments.map(
+                    (a) => _AttachmentLink(attachment: a, isFromUser: isFromUser),
+                  ),
                   const SizedBox(height: 6),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -690,8 +759,8 @@ class _MessageBubble extends StatelessWidget {
 }
 
 class _MessageInput extends StatefulWidget {
-  final Function(String, {String? attachmentUrl, String? attachmentName})
-  onSend;
+  final Future<void> Function(String message,
+      {required List<MessageAttachment> attachments}) onSend;
 
   const _MessageInput({required this.onSend});
 
@@ -699,11 +768,19 @@ class _MessageInput extends StatefulWidget {
   State<_MessageInput> createState() => _MessageInputState();
 }
 
+class _PendingAttachment {
+  final String name;
+  final Uint8List bytes;
+  String? error;
+
+  _PendingAttachment({required this.name, required this.bytes});
+}
+
 class _MessageInputState extends State<_MessageInput> {
   final _controller = TextEditingController();
   bool _canSend = false;
-  String? _attachmentPath;
-  String? _attachmentName;
+  bool _isSending = false;
+  final List<_PendingAttachment> _pending = [];
 
   @override
   void initState() {
@@ -713,7 +790,7 @@ class _MessageInputState extends State<_MessageInput> {
 
   void _updateSendState() {
     setState(() {
-      _canSend = _controller.text.trim().isNotEmpty || _attachmentPath != null;
+      _canSend = _controller.text.trim().isNotEmpty || _pending.isNotEmpty;
     });
   }
 
@@ -723,62 +800,94 @@ class _MessageInputState extends State<_MessageInput> {
     super.dispose();
   }
 
-  void _handleSend() {
+  Future<void> _handleSend() async {
+    if (_isSending) return;
     final message = _controller.text.trim();
-    if (message.isNotEmpty || _attachmentPath != null) {
-      widget.onSend(
+    if (message.isEmpty && _pending.isEmpty) return;
+
+    setState(() => _isSending = true);
+
+    final uploaded = <MessageAttachment>[];
+    final stillPending = <_PendingAttachment>[];
+
+    for (final item in _pending) {
+      if (!StorageService.isFileSizeAllowed(item.bytes.lengthInBytes)) {
+        item.error = 'Too large (max 10 MB)';
+        stillPending.add(item);
+        continue;
+      }
+      final url =
+          await StorageService.uploadFile(fileName: item.name, bytes: item.bytes);
+      if (url != null) {
+        uploaded.add(MessageAttachment(url: url, name: item.name));
+      } else {
+        item.error = 'Upload failed — tap to retry';
+        stillPending.add(item);
+      }
+    }
+
+    if (message.isNotEmpty || uploaded.isNotEmpty) {
+      await widget.onSend(
         message.isEmpty ? '📎 Sent an attachment' : message,
-        attachmentUrl: _attachmentPath,
-        attachmentName: _attachmentName,
+        attachments: uploaded,
       );
       _controller.clear();
-      setState(() {
-        _attachmentPath = null;
-        _attachmentName = null;
-      });
     }
+
+    if (!mounted) return;
+    setState(() {
+      _pending
+        ..clear()
+        ..addAll(stillPending);
+      _isSending = false;
+    });
+    _updateSendState();
   }
 
-  Future<void> _pickImage() async {
+  void _removeAttachment(_PendingAttachment item) {
+    setState(() => _pending.remove(item));
+    _updateSendState();
+  }
+
+  Future<void> _retryAttachment(_PendingAttachment item) async {
+    setState(() => item.error = null);
+    final url =
+        await StorageService.uploadFile(fileName: item.name, bytes: item.bytes);
+    if (!mounted) return;
+    if (url != null) {
+      await widget.onSend('📎 Sent an attachment',
+          attachments: [MessageAttachment(url: url, name: item.name)]);
+      if (!mounted) return;
+      setState(() => _pending.remove(item));
+    } else {
+      setState(() => item.error = 'Upload failed — tap to retry');
+    }
+    _updateSendState();
+  }
+
+  Future<void> _pickImages() async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      setState(() {
-        _attachmentPath = image.path;
-        _attachmentName = image.name;
-      });
-      _updateSendState();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Image selected: ${image.name}'),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+    final images = await picker.pickMultiImage();
+    if (images.isEmpty) return;
+    for (final image in images) {
+      final bytes = await image.readAsBytes();
+      _pending.add(_PendingAttachment(name: image.name, bytes: bytes));
     }
+    setState(() {});
+    _updateSendState();
   }
 
-  Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.isNotEmpty) {
-      final file = result.files.first;
-      setState(() {
-        _attachmentPath = file.path;
-        _attachmentName = file.name;
-      });
-      _updateSendState();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('File selected: ${file.name}'),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+  Future<void> _pickFiles() async {
+    final result =
+        await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
+    if (result == null) return;
+    for (final file in result.files) {
+      final bytes = file.bytes;
+      if (bytes == null) continue;
+      _pending.add(_PendingAttachment(name: file.name, bytes: bytes));
     }
+    setState(() {});
+    _updateSendState();
   }
 
   void _showAttachmentOptions() {
@@ -821,7 +930,7 @@ class _MessageInputState extends State<_MessageInput> {
                   color: AppColors.primary,
                   onTap: () {
                     Navigator.pop(context);
-                    _pickImage();
+                    _pickImages();
                   },
                 ),
                 _AttachmentOption(
@@ -830,7 +939,7 @@ class _MessageInputState extends State<_MessageInput> {
                   color: AppColors.secondary,
                   onTap: () {
                     Navigator.pop(context);
-                    _pickFile();
+                    _pickFiles();
                   },
                 ),
               ],
@@ -842,60 +951,30 @@ class _MessageInputState extends State<_MessageInput> {
     );
   }
 
-  void _clearAttachment() {
-    setState(() {
-      _attachmentPath = null;
-      _attachmentName = null;
-    });
-    _updateSendState();
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Attachment Preview
-          if (_attachmentPath != null)
+          if (_pending.isNotEmpty)
             Container(
               margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _attachmentName?.contains('.') == true &&
-                            ['jpg', 'jpeg', 'png', 'gif'].contains(
-                              _attachmentName!.split('.').last.toLowerCase(),
-                            )
-                        ? Icons.image
-                        : Icons.insert_drive_file,
-                    color: AppColors.primary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _attachmentName ?? 'Attachment',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.textPrimary,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: _clearAttachment,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    color: AppColors.textSecondary,
-                  ),
-                ],
+              height: 36,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _pending.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final item = _pending[index];
+                  return _AttachmentChip(
+                    name: item.name,
+                    error: item.error,
+                    onRemove: () => _removeAttachment(item),
+                    onRetry:
+                        item.error != null ? () => _retryAttachment(item) : null,
+                  );
+                },
               ),
             ),
           Row(
@@ -952,17 +1031,95 @@ class _MessageInputState extends State<_MessageInput> {
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: IconButton(
-                    icon: Icon(
-                      Icons.send_rounded,
-                      color: _canSend ? Colors.white : AppColors.textTertiary,
-                    ),
-                    onPressed: _canSend ? _handleSend : null,
+                    icon: _isSending
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(
+                            Icons.send_rounded,
+                            color: _canSend ? Colors.white : AppColors.textTertiary,
+                          ),
+                    onPressed:
+                        (_canSend && !_isSending) ? _handleSend : null,
                   ),
                 ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A pending (not-yet-sent) attachment chip — removable, and retryable if its
+/// upload failed.
+class _AttachmentChip extends StatelessWidget {
+  final String name;
+  final String? error;
+  final VoidCallback onRemove;
+  final VoidCallback? onRetry;
+
+  const _AttachmentChip({
+    required this.name,
+    required this.onRemove,
+    this.error,
+    this.onRetry,
+  });
+
+  bool get _isImage {
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    return ['jpg', 'jpeg', 'png', 'gif'].contains(ext);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasError = error != null;
+    return GestureDetector(
+      onTap: onRetry,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: hasError
+              ? AppColors.errorLight
+              : AppColors.primaryLight.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasError
+                  ? Icons.error_outline
+                  : (_isImage ? Icons.image : Icons.insert_drive_file),
+              size: 16,
+              color: hasError ? AppColors.error : AppColors.primary,
+            ),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 100),
+              child: Text(
+                hasError ? error! : name,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: hasError ? AppColors.error : AppColors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: onRemove,
+              child: const Icon(Icons.close, size: 14, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1131,45 +1288,24 @@ class _GroupChatView extends ConsumerStatefulWidget {
 }
 
 class _GroupChatViewState extends ConsumerState<_GroupChatView> {
-  final _controller = TextEditingController();
   final _scrollController = ScrollController();
-  bool _canSend = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.addListener(() {
-      setState(() {
-        _canSend = _controller.text.trim().isNotEmpty;
-      });
-    });
-  }
 
   @override
   void dispose() {
-    _controller.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _sendMessage() {
-    final message = _controller.text.trim();
-    if (message.isNotEmpty) {
-      ref
-          .read(groupChatsProvider.notifier)
-          .sendGroupMessage(widget.groupId, message);
-      _controller.clear();
-      // Scroll to bottom after sending
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-    }
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
@@ -1230,67 +1366,13 @@ class _GroupChatViewState extends ConsumerState<_GroupChatView> {
               ),
             ],
           ),
-          child: SafeArea(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: TextField(
-                            controller: _controller,
-                            decoration: const InputDecoration(
-                              hintText: 'Type a message...',
-                              hintStyle: TextStyle(
-                                color: AppColors.textTertiary,
-                                fontSize: 14,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(
-                                vertical: 12,
-                              ),
-                            ),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textPrimary,
-                            ),
-                            maxLines: 4,
-                            minLines: 1,
-                            textCapitalization: TextCapitalization.sentences,
-                            onSubmitted: (_) => _sendMessage(),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: _canSend ? AppColors.primaryGradient : null,
-                      color: _canSend ? null : AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.send_rounded,
-                        color: _canSend ? Colors.white : AppColors.textTertiary,
-                      ),
-                      onPressed: _canSend ? _sendMessage : null,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          child: _MessageInput(
+            onSend: (message, {required attachments}) async {
+              ref
+                  .read(groupChatsProvider.notifier)
+                  .sendGroupMessage(widget.groupId, message, attachments: attachments);
+              _scrollToBottom();
+            },
           ),
         ),
       ],
@@ -1411,7 +1493,7 @@ class _GroupMessageBubble extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        message.senderName.split(' ').first,
+                        message.senderName,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -1426,6 +1508,9 @@ class _GroupMessageBubble extends StatelessWidget {
                       color: isFromUser ? Colors.white : AppColors.textPrimary,
                       height: 1.4,
                     ),
+                  ),
+                  ...message.attachments.map(
+                    (a) => _AttachmentLink(attachment: a, isFromUser: isFromUser),
                   ),
                   const SizedBox(height: 4),
                   Text(
