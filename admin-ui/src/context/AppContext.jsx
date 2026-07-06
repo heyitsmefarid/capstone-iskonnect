@@ -619,7 +619,7 @@ export function AppProvider({ children }) {
     return ref.id;
   };
 
-  const sendGroupMessage = async (groupFirestoreId, text) => {
+  const sendGroupMessage = async (groupFirestoreId, text, attachments = []) => {
     const { db, isReady } = initializeFirebase();
     if (!isReady || !db || !groupFirestoreId || !text) return;
     await updateDoc(doc(db, 'group_chats', groupFirestoreId), {
@@ -629,6 +629,7 @@ export function AppProvider({ children }) {
         senderId: 'admin',
         text,
         timestamp: new Date().toISOString(),
+        attachments,
       }),
     });
   };
@@ -664,7 +665,7 @@ export function AppProvider({ children }) {
   }, [authReady, systemSettings.defaultAcademicYear, systemSettings.defaultSemester]);
 
   // Sends a message from the admin to a student (the scholar app reads it).
-  const sendDirectMessage = async (toUserId, body, subject = 'Message from CED') => {
+  const sendDirectMessage = async (toUserId, body, subject = 'Message from CED', attachments = []) => {
     const { db, isReady } = initializeFirebase();
     if (!isReady || !db || !toUserId || !body) return;
     await addDoc(collection(db, 'messages'), {
@@ -674,6 +675,7 @@ export function AppProvider({ children }) {
       body,
       createdAt: new Date().toISOString(),
       readBy: ['admin'],
+      attachments,
     });
   };
 
