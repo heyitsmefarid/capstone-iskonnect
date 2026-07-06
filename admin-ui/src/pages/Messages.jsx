@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useOutletContext } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import Swal from 'sweetalert2';
 import { formatPersonName } from '../utils/nameFormat';
+import { uploadFile, isFileSizeAllowed } from '../services/cloudinaryUpload';
 import {
   MessageCircle,
   Search,
@@ -12,6 +13,9 @@ import {
   Plus,
   UserPlus,
   PencilLine,
+  Paperclip,
+  X,
+  Download,
 } from 'lucide-react';
 
 const MESSAGE_NOTIFICATION_KEY = 'ced_unread_messages';
@@ -40,6 +44,9 @@ export default function Messages() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [composerText, setComposerText] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  const [isSending, setIsSending] = useState(false);
+  const fileInputRef = useRef(null);
 
   // A thread is either { type: 'group', id: <group firestoreId> } or
   // { type: 'direct', id: <student.id> }. Null until one is auto-selected.
@@ -77,6 +84,7 @@ export default function Messages() {
           sender: m.fromUserId === 'admin' ? 'Admin' : formatPersonName(student),
           text: m.body || m.text || '',
           timestamp: m.createdAt || new Date().toISOString(),
+          attachments: m.attachments || [],
         };
       })
       .filter(Boolean);
@@ -302,39 +310,95 @@ export default function Messages() {
     }
   };
 
+  const handleFilesSelected = (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // allow re-selecting the same file later
+
+    const accepted = [];
+    for (const file of files) {
+      if (!isFileSizeAllowed(file.size)) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'File too large',
+          text: `"${file.name}" is over the 10 MB limit.`,
+        });
+        continue;
+      }
+      accepted.push(file);
+    }
+    setPendingAttachments((prev) => [...prev, ...accepted]);
+  };
+
+  const handleRemoveAttachment = (index) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
 
     const text = composerText.trim();
-    if (!text || !selectedThread) return;
+    if ((!text && pendingAttachments.length === 0) || !selectedThread) return;
+
+    setIsSending(true);
+    const uploaded = [];
+    for (const file of pendingAttachments) {
+      const url = await uploadFile(file);
+      if (url) {
+        uploaded.push({ url, name: file.name });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Upload Failed',
+          text: `"${file.name}" could not be uploaded. It was not sent.`,
+        });
+      }
+    }
+
+    const messageText = text || '📎 Sent an attachment';
 
     if (selectedThread.type === 'group') {
-      if (!selectedGroup) return;
+      if (!selectedGroup) {
+        setIsSending(false);
+        return;
+      }
       try {
-        await sendGroupMessage(selectedGroup.firestoreId, text);
-      } catch (err) {
+        await sendGroupMessage(selectedGroup.firestoreId, messageText, uploaded);
+      } catch {
         Swal.fire({
           icon: 'error',
           title: 'Cannot Send',
           text: 'Message could not be sent to the group.',
         });
+        setIsSending(false);
         return;
       }
     } else {
       const student = getStudentById(selectedThread.id);
-      if (student?.firestoreId) {
-        sendDirectMessage(student.firestoreId, text);
-      } else {
+      if (!student?.firestoreId) {
         Swal.fire({
           icon: 'warning',
           title: 'Cannot Send',
           text: 'This student is not linked to a synced account yet.',
         });
+        setIsSending(false);
+        return;
+      }
+      try {
+        await sendDirectMessage(student.firestoreId, messageText, 'Message from CED', uploaded);
+      } catch {
+        Swal.fire({
+          icon: 'error',
+          title: 'Cannot Send',
+          text: 'Message could not be sent to the student.',
+        });
+        setIsSending(false);
         return;
       }
     }
 
     setComposerText('');
+    setPendingAttachments([]);
+    setIsSending(false);
   };
 
   const handleStartNewConversation = (e) => {
@@ -622,6 +686,16 @@ export default function Messages() {
                 <div key={msg.id} className={`bubble-row ${msg.sender === 'Admin' ? 'mine' : ''}`}>
                   <div className="bubble">
                     <div className="bubble-text">{msg.text}</div>
+                    {(msg.attachments || []).map((a, i) => (
+                      <a
+                        key={i}
+                        href={a.url}
+                        download={a.name}
+                        className="attachment-link"
+                      >
+                        <Download size={12} /> {a.name}
+                      </a>
+                    ))}
                     <div className="bubble-meta">
                       {msg.sender} • {new Date(msg.timestamp).toLocaleString()}
                     </div>
@@ -630,7 +704,35 @@ export default function Messages() {
               ))}
             </div>
 
+            {pendingAttachments.length > 0 && (
+              <div className="pending-attachments">
+                {pendingAttachments.map((file, i) => (
+                  <span key={i} className="attachment-chip">
+                    {file.name}
+                    <button type="button" onClick={() => handleRemoveAttachment(i)}>
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
             <form className="composer" onSubmit={handleSendMessage}>
+              <input
+                type="file"
+                multiple
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleFilesSelected}
+              />
+              <button
+                type="button"
+                className="mini-btn attach-btn"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!selectedThread}
+              >
+                <Paperclip size={16} />
+              </button>
               <input
                 type="text"
                 value={composerText}
@@ -641,9 +743,8 @@ export default function Messages() {
                     : 'Message student directly...'
                 }
                 disabled={!selectedThread}
-                required
               />
-              <button type="submit" className="send-btn">
+              <button type="submit" className="send-btn" disabled={isSending || !selectedThread}>
                 <Send size={16} />
               </button>
             </form>
@@ -1054,9 +1155,53 @@ export default function Messages() {
           opacity: 0.7;
         }
 
+        .attachment-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          margin-top: 4px;
+          font-size: 0.78rem;
+          color: inherit;
+          text-decoration: underline;
+        }
+
+        .pending-attachments {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          padding: 0 4px 8px;
+        }
+
+        .attachment-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 8px;
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-color);
+          border-radius: 12px;
+          font-size: 0.78rem;
+        }
+
+        .attachment-chip button {
+          display: flex;
+          align-items: center;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--text-secondary);
+          padding: 0;
+        }
+
+        .attach-btn {
+          flex-shrink: 0;
+          justify-content: center;
+          padding: 7px;
+        }
+
         .composer {
           display: grid;
-          grid-template-columns: 1fr 44px;
+          grid-template-columns: 44px 1fr 44px;
           gap: 8px;
           padding-top: 2px;
         }
