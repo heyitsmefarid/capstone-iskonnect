@@ -576,12 +576,11 @@ class _AttachmentLink extends StatelessWidget {
   }
 
   Future<void> _download(BuildContext context) async {
-    // Cloudinary doesn't send Content-Disposition: attachment by default, so
-    // a plain link often just opens the file inline instead of downloading
-    // it. The fl_attachment delivery flag forces a real download.
-    final downloadUrl = attachment.url.replaceFirst('/upload/', '/upload/fl_attachment/');
+    // Cloudinary's plain secure_url: fl_attachment was tried here but caused
+    // ERR_INVALID_RESPONSE against this account's delivery settings, so this
+    // just opens/saves the file via whatever the OS/browser does with it.
     final ok = await launchUrl(
-      Uri.parse(downloadUrl),
+      Uri.parse(attachment.url),
       mode: LaunchMode.externalApplication,
     );
     if (!ok && context.mounted) {
@@ -596,32 +595,69 @@ class _AttachmentLink extends StatelessWidget {
     final textColor = isFromUser ? Colors.white : AppColors.textPrimary;
     return Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: InkWell(
-        onTap: () => _download(context),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              _isImage ? Icons.image : Icons.insert_drive_file,
-              size: 14,
-              color: textColor,
-            ),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                attachment.name,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: textColor,
-                  decoration: TextDecoration.underline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_isImage)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: GestureDetector(
+                onTap: () => _download(context),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(
+                    attachment.url,
+                    width: 180,
+                    height: 180,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (c, child, progress) => progress == null
+                        ? child
+                        : const SizedBox(
+                            width: 180,
+                            height: 120,
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                    errorBuilder: (c, e, s) => Container(
+                      width: 180,
+                      height: 120,
+                      color: AppColors.surfaceVariant,
+                      child: const Icon(Icons.broken_image_outlined),
+                    ),
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 4),
-            Icon(Icons.download_rounded, size: 14, color: textColor),
-          ],
-        ),
+          InkWell(
+            onTap: () => _download(context),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _isImage ? Icons.image : Icons.insert_drive_file,
+                  size: 14,
+                  color: textColor,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    attachment.name,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: textColor,
+                      decoration: TextDecoration.underline,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.download_rounded, size: 14, color: textColor),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

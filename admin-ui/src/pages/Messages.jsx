@@ -23,10 +23,13 @@ const MESSAGE_NOTIFICATION_KEY = 'ced_unread_messages';
 // Statuses that qualify as "scholars" (not applicants)
 const SCHOLAR_STATUSES = ['approved', 'active', 'on-hold', 'graduated', 'terminated'];
 
-// Cloudinary doesn't send Content-Disposition: attachment by default, so a
-// plain link often just opens the file inline instead of downloading it.
-// The fl_attachment delivery flag forces a real download.
-const toDownloadUrl = (url) => url.replace('/upload/', '/upload/fl_attachment/');
+// fl_attachment was tried here to force a real download, but it caused
+// ERR_INVALID_RESPONSE against this Cloudinary account's delivery settings —
+// reverted to the plain secure_url (opens/saves depending on the browser).
+const isImageAttachment = (name) => {
+  const ext = name?.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  return ['jpg', 'jpeg', 'png', 'gif'].includes(ext);
+};
 
 export default function Messages() {
   const {
@@ -697,14 +700,16 @@ export default function Messages() {
                   <div className="bubble">
                     <div className="bubble-text">{msg.text}</div>
                     {(msg.attachments || []).map((a, i) => (
-                      <a
-                        key={i}
-                        href={toDownloadUrl(a.url)}
-                        download={a.name}
-                        className="attachment-link"
-                      >
-                        <Download size={12} /> {a.name}
-                      </a>
+                      <div key={i}>
+                        {isImageAttachment(a.name) && (
+                          <a href={a.url} target="_blank" rel="noopener noreferrer">
+                            <img src={a.url} alt={a.name} className="attachment-thumb" />
+                          </a>
+                        )}
+                        <a href={a.url} download={a.name} className="attachment-link">
+                          <Download size={12} /> {a.name}
+                        </a>
+                      </div>
                     ))}
                     <div className="bubble-meta">
                       {msg.sender} • {new Date(msg.timestamp).toLocaleString()}
@@ -1173,6 +1178,15 @@ export default function Messages() {
           font-size: 0.78rem;
           color: inherit;
           text-decoration: underline;
+        }
+
+        .attachment-thumb {
+          display: block;
+          max-width: 180px;
+          max-height: 180px;
+          border-radius: 8px;
+          margin-top: 4px;
+          object-fit: cover;
         }
 
         .pending-attachments {
