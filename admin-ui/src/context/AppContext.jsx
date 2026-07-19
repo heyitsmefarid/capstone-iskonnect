@@ -541,6 +541,7 @@ export function AppProvider({ children }) {
       message: data.message,
       target: data.target,
       isImportant: !!data.isImportant,
+      attachments: data.attachments || [],
       author: 'Admin',
       date: new Date().toISOString().split('T')[0],
       createdAt: Date.now(),
@@ -557,6 +558,7 @@ export function AppProvider({ children }) {
         message: data.message,
         target: data.target,
         isImportant: !!data.isImportant,
+        attachments: data.attachments || [],
       },
       { merge: true }
     );
