@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iskonnectttt/core/models/announcement_model.dart';
+import 'package:iskonnectttt/core/models/message_attachment_model.dart';
 import 'package:iskonnectttt/core/models/student_model.dart';
 import 'package:iskonnectttt/core/services/scholar_firestore_service.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
@@ -38,7 +39,7 @@ class AnnouncementsNotifier extends StateNotifier<List<AnnouncementModel>> {
           '',
       date: _parseDate(record['date']),
       imageUrl: record['imageUrl']?.toString(),
-      attachments: List<String>.from(record['attachments'] ?? const []),
+      attachments: MessageAttachment.listFromJson(record['attachments'] as List?),
       isImportant: record['isImportant'] ?? false,
       isRead: _readIds.contains(id),
       // Admin writes the audience as `target` (everyone/applicants/scholars).

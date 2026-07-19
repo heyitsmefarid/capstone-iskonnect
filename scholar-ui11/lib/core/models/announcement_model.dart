@@ -1,3 +1,5 @@
+import 'package:iskonnectttt/core/models/message_attachment_model.dart';
+
 /// Enum to define announcement visibility
 enum AnnouncementVisibility {
   all, // Visible to both scholars and applicants
@@ -11,7 +13,7 @@ class AnnouncementModel {
   final String description;
   final DateTime date;
   final String? imageUrl;
-  final List<String> attachments;
+  final List<MessageAttachment> attachments;
   final bool isImportant;
   final bool isRead;
   final AnnouncementVisibility visibility;
@@ -37,7 +39,7 @@ class AnnouncementModel {
     String? description,
     DateTime? date,
     String? imageUrl,
-    List<String>? attachments,
+    List<MessageAttachment>? attachments,
     bool? isImportant,
     bool? isRead,
     AnnouncementVisibility? visibility,
@@ -62,7 +64,7 @@ class AnnouncementModel {
       'description': description,
       'date': date.toIso8601String(),
       'imageUrl': imageUrl,
-      'attachments': attachments,
+      'attachments': MessageAttachment.listToJson(attachments),
       'isImportant': isImportant,
       'isRead': isRead,
       'visibility': visibility.name,
@@ -76,7 +78,7 @@ class AnnouncementModel {
       description: json['description'],
       date: DateTime.parse(json['date']),
       imageUrl: json['imageUrl'],
-      attachments: List<String>.from(json['attachments'] ?? []),
+      attachments: MessageAttachment.listFromJson(json['attachments'] as List?),
       isImportant: json['isImportant'] ?? false,
       isRead: json['isRead'] ?? false,
       visibility: AnnouncementVisibility.values.firstWhere(
