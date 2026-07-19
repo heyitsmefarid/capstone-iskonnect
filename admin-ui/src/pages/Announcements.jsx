@@ -1,10 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useOutletContext } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { SearchInput, EmptyState } from '../components/common';
 import Swal from 'sweetalert2';
-import { Plus, Send, Trash2, Bell, Edit2, AlertTriangle, Search, Filter } from 'lucide-react';
+import { uploadFile, isFileSizeAllowed } from '../services/cloudinaryUpload';
+import { Plus, Send, Trash2, Bell, Edit2, AlertTriangle, Search, Filter, Paperclip, X, Download } from 'lucide-react';
+
+// fl_attachment was tried for downloads elsewhere in this codebase and caused
+// ERR_INVALID_RESPONSE against this Cloudinary account's delivery settings —
+// this uses the plain secure_url, same as Messages.jsx.
+const isImageAttachment = (name) => {
+  const ext = name?.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  return ['jpg', 'jpeg', 'png', 'gif'].includes(ext);
+};
 
 const SCHOLAR_STATUSES = ['approved', 'active', 'on-hold', 'graduated', 'terminated'];
 const APPLICANT_STATUSES = ['pending'];
@@ -55,6 +64,13 @@ export default function Announcements() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTarget, setFilterTarget] = useState('');
 
+  // Newly picked files for this form session, not yet uploaded: File objects.
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+  // Attachments already saved on the announcement being edited: {url, name}.
+  const [existingAttachments, setExistingAttachments] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef(null);
+
   /* ─── Filtered announcements ─── */
 
   const filteredAnnouncements = useMemo(() => {
@@ -81,6 +97,8 @@ export default function Announcements() {
     setAnnouncementForm({ title: '', message: '', target: 'everyone', isImportant: false });
     setEditingId(null);
     setShowForm(false);
+    setPendingAttachments([]);
+    setExistingAttachments([]);
   };
 
   const handleEdit = (announcement) => {
@@ -91,7 +109,36 @@ export default function Announcements() {
       target: announcement.target,
       isImportant: announcement.isImportant || false,
     });
+    setExistingAttachments(announcement.attachments || []);
+    setPendingAttachments([]);
     setShowForm(true);
+  };
+
+  const handleFilesSelected = (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ''; // allow re-selecting the same file later
+
+    const accepted = [];
+    for (const file of files) {
+      if (!isFileSizeAllowed(file.size)) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'File too large',
+          text: `"${file.name}" is over the 10 MB limit.`,
+        });
+        continue;
+      }
+      accepted.push(file);
+    }
+    setPendingAttachments((prev) => [...prev, ...accepted]);
+  };
+
+  const handleRemovePendingAttachment = (index) => {
+    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveExistingAttachment = (index) => {
+    setExistingAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e) => {
@@ -108,9 +155,25 @@ export default function Announcements() {
       return;
     }
 
+    setIsSaving(true);
+    const uploaded = [];
+    for (const file of pendingAttachments) {
+      const url = await uploadFile(file);
+      if (url) {
+        uploaded.push({ url, name: file.name });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Upload Failed',
+          text: `"${file.name}" could not be uploaded. It was not attached.`,
+        });
+      }
+    }
+    const attachments = [...existingAttachments, ...uploaded];
+
     try {
       if (editingId) {
-        await updateAnnouncement(editingId, announcementForm);
+        await updateAnnouncement(editingId, { ...announcementForm, attachments });
         Swal.fire({
           title: 'Updated!',
           text: 'Announcement has been updated.',
@@ -119,7 +182,7 @@ export default function Announcements() {
           showConfirmButton: false,
         });
       } else {
-        await addAnnouncement(announcementForm);
+        await addAnnouncement({ ...announcementForm, attachments });
         Swal.fire({
           title: 'Posted!',
           text: `Announcement sent to ${recipients.length} student(s).`,
@@ -135,6 +198,8 @@ export default function Announcements() {
         title: 'Failed',
         text: 'Could not save the announcement. Please try again.',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -180,6 +245,8 @@ export default function Announcements() {
               } else {
                 setEditingId(null);
                 setAnnouncementForm({ title: '', message: '', target: 'everyone', isImportant: false });
+                setPendingAttachments([]);
+                setExistingAttachments([]);
                 setShowForm(true);
               }
             }}
@@ -269,13 +336,51 @@ export default function Announcements() {
                   Mark as Important
                 </label>
               </div>
+              <div className="form-group">
+                <label>Attachments</label>
+                <input
+                  type="file"
+                  multiple
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  onChange={handleFilesSelected}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary attach-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip size={16} />
+                  Attach Files
+                </button>
+                {(existingAttachments.length > 0 || pendingAttachments.length > 0) && (
+                  <div className="pending-attachments">
+                    {existingAttachments.map((a, i) => (
+                      <span key={`existing-${i}`} className="attachment-chip">
+                        {a.name}
+                        <button type="button" onClick={() => handleRemoveExistingAttachment(i)}>
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                    {pendingAttachments.map((file, i) => (
+                      <span key={`pending-${i}`} className="attachment-chip">
+                        {file.name}
+                        <button type="button" onClick={() => handleRemovePendingAttachment(i)}>
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="form-actions">
                 <button type="button" className="btn btn-secondary" onClick={resetForm}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary" disabled={isSaving}>
                   <Send size={18} />
-                  {editingId ? 'Update Announcement' : 'Post Announcement'}
+                  {isSaving ? 'Saving...' : editingId ? 'Update Announcement' : 'Post Announcement'}
                 </button>
               </div>
             </form>
@@ -314,6 +419,22 @@ export default function Announcements() {
                   </div>
                 </div>
                 <p className="announcement-message">{announcement.message}</p>
+                {(announcement.attachments || []).length > 0 && (
+                  <div className="announcement-attachments">
+                    {announcement.attachments.map((a, i) => (
+                      <div key={i}>
+                        {isImageAttachment(a.name) && (
+                          <a href={a.url} target="_blank" rel="noopener noreferrer">
+                            <img src={a.url} alt={a.name} className="attachment-thumb" />
+                          </a>
+                        )}
+                        <a href={a.url} download={a.name} className="attachment-link">
+                          <Download size={12} /> {a.name}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -415,6 +536,67 @@ export default function Announcements() {
           display: flex;
           align-items: center;
           gap: 0.5rem;
+        }
+
+        .attach-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          width: auto;
+        }
+
+        .pending-attachments {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px;
+          margin-top: 8px;
+        }
+
+        .attachment-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 8px;
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-color);
+          border-radius: 12px;
+          font-size: 0.78rem;
+          color: var(--text-primary);
+        }
+
+        .attachment-chip button {
+          display: flex;
+          align-items: center;
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--text-secondary);
+          padding: 0;
+        }
+
+        .announcement-attachments {
+          margin-top: 0.75rem;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .attachment-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 0.8rem;
+          color: var(--primary-light, var(--primary-color));
+          text-decoration: underline;
+        }
+
+        .attachment-thumb {
+          display: block;
+          max-width: 200px;
+          max-height: 200px;
+          border-radius: 8px;
+          margin-bottom: 4px;
+          object-fit: cover;
         }
 
         .inline-meta {
