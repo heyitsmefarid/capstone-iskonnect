@@ -5,6 +5,7 @@ import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/core/utils/formatters.dart';
 import 'package:iskonnectttt/features/announcements/providers/announcements_provider.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
+import 'package:iskonnectttt/shared/utils/attachment_download.dart';
 
 class AnnouncementDetailScreen extends ConsumerWidget {
   final String announcementId;
@@ -24,7 +25,6 @@ class AnnouncementDetailScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
-          // Modern Custom App Bar
           SliverAppBar(
             expandedHeight: 160,
             pinned: true,
@@ -296,95 +296,140 @@ class AnnouncementDetailScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     ...announcement.attachments.map((attachment) {
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.cardBackground,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(
-                                0xFFF59E0B,
-                              ).withValues(alpha: 0.08),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Color(0xFFF59E0B),
-                                    Color(0xFFD97706),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                _getFileIcon(attachment),
-                                size: 22,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    attachment,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                            if (_isImageAttachment(attachment.name))
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: GestureDetector(
+                                  onTap: () => downloadAttachment(
+                                    context,
+                                    url: attachment.url,
+                                    fileName: attachment.name,
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Tap to download',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textTertiary,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Image.network(
+                                      attachment.url,
+                                      width: double.infinity,
+                                      height: 180,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder: (c, child, progress) =>
+                                          progress == null
+                                          ? child
+                                          : Container(
+                                              width: double.infinity,
+                                              height: 180,
+                                              color: AppColors.cardBackground,
+                                              child: const Center(
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                ),
+                                              ),
+                                            ),
+                                      errorBuilder: (c, e, s) => Container(
+                                        width: double.infinity,
+                                        height: 180,
+                                        color: AppColors.cardBackground,
+                                        child: const Icon(
+                                          Icons.broken_image_outlined,
+                                        ),
+                                      ),
                                     ),
+                                  ),
+                                ),
+                              ),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppColors.cardBackground,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFFF59E0B,
+                                    ).withValues(alpha: 0.08),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
                                   ),
                                 ],
                               ),
-                            ),
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFFF59E0B,
-                                ).withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: IconButton(
-                                icon: const Icon(
-                                  Icons.download_rounded,
-                                  color: Color(0xFFF59E0B),
-                                  size: 20,
-                                ),
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Download feature will be available soon',
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 46,
+                                    height: 46,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Color(0xFFF59E0B),
+                                          Color(0xFFD97706),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
                                       ),
-                                      behavior: SnackBarBehavior.floating,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                  );
-                                },
+                                    child: Icon(
+                                      _getFileIcon(attachment.name),
+                                      size: 22,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          attachment.name,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Tap to download',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.textTertiary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: const Color(
+                                        0xFFF59E0B,
+                                      ).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.download_rounded,
+                                        color: Color(0xFFF59E0B),
+                                        size: 20,
+                                      ),
+                                      onPressed: () => downloadAttachment(
+                                        context,
+                                        url: attachment.url,
+                                        fileName: attachment.name,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -507,6 +552,12 @@ class AnnouncementDetailScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  bool _isImageAttachment(String fileName) {
+    final ext =
+        fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+    return ['jpg', 'jpeg', 'png', 'gif'].contains(ext);
   }
 
   IconData _getFileIcon(String fileName) {
