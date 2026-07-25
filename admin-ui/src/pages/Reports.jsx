@@ -804,10 +804,9 @@ export default function Reports() {
   };
 
   const generateFundsRemaining = () => {
-    const TOTAL_BUDGET = 10000000; // ₱10M example budget
     const scholars = getFilteredScholars();
-    const byHEI = schools.map(school => {
-      const schoolScholars = scholars.filter(a => a.school === school.name);
+    const byHEI = schoolOptions.map(schoolName => {
+      const schoolScholars = scholars.filter(a => a.school === schoolName);
       const disbursed = schoolScholars
         .filter(a => a.disbursementStatus === 'Completed')
         .reduce((sum, s) => sum + (s.amountGranted || 0), 0);
