@@ -28,9 +28,12 @@ function toDataUrl(url) {
 /** Loads (and caches) the CED letterhead banner images as data URLs for jsPDF. */
 export function loadLetterheadImages() {
   if (!cachedImages) {
-    cachedImages = Promise.all([toDataUrl(headerUrl), toDataUrl(footerUrl)]).then(
-      ([header, footer]) => ({ header, footer })
-    );
+    cachedImages = Promise.all([toDataUrl(headerUrl), toDataUrl(footerUrl)])
+      .then(([header, footer]) => ({ header, footer }))
+      .catch((err) => {
+        cachedImages = null;
+        throw err;
+      });
   }
   return cachedImages;
 }
