@@ -20,7 +20,8 @@ import {
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
+import { loadLetterheadImages, getLetterheadLayout, drawLetterheadBands } from '../utils/reportLetterhead';
 import { matchesExact } from '../utils/filtering';
 import { fetchReportSummary } from '../services/backendApi';
 
@@ -939,27 +940,37 @@ export default function Reports() {
     saveAs(blob, `${filename}.xlsx`);
   };
 
-  const exportToPDF = (data, title, filename) => {
+  const exportToPDF = async (data, title, filename) => {
+    const images = await loadLetterheadImages();
     const doc = new jsPDF('l', 'mm', 'a4');
-    
+    const { headerHeight, footerHeight } = getLetterheadLayout(doc);
+
     doc.setFontSize(16);
-    doc.text(title, 14, 15);
+    doc.text(title, 14, headerHeight + 8);
     doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 22);
-    
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, headerHeight + 14);
+
     if (data.length > 0) {
       const headers = Object.keys(data[0]);
-      const rows = data.map(row => headers.map(header => row[header]));
-      
-      doc.autoTable({
-        startY: 28,
+      // jsPDF's built-in fonts only support WinAnsi encoding, which has no ₱
+      // glyph — it silently renders as "±" instead. Swap in an ASCII-safe
+      // "PHP" prefix for the PDF only; Excel/on-screen keep the real ₱ symbol.
+      const toPdfSafe = (val) => (typeof val === 'string' ? val.replace(/₱/g, 'PHP ') : val);
+      const rows = data.map(row => headers.map(header => toPdfSafe(row[header])));
+
+      autoTable(doc, {
+        startY: headerHeight + 20,
         head: [headers],
         body: rows,
         styles: { fontSize: 8 },
         headStyles: { fillColor: [27, 77, 92] },
+        margin: { top: headerHeight + 20, bottom: footerHeight + 4 },
+        didDrawPage: () => drawLetterheadBands(doc, images),
       });
+    } else {
+      drawLetterheadBands(doc, images);
     }
-    
+
     doc.save(`${filename}.pdf`);
   };
 
