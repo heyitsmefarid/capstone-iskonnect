@@ -675,7 +675,7 @@ export default function Reports() {
 
   const generateYearToYearGrowth = () => {
     const scholars = getFilteredScholars();
-    const years = ['2023-2024', '2024-2025', '2025-2026'];
+    const years = academicYearOptions;
     return years.map((year) => {
       const yearStart = Number(year.split('-')[0]);
       const scholarsForYear = scholars.filter(a => (a.yearAwarded || new Date(a.createdAt).getFullYear()) <= yearStart);
