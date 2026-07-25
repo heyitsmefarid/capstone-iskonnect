@@ -36,7 +36,7 @@ const REPORT_CATEGORIES = {
 };
 
 export default function Reports() {
-  const { applicants, schools } = useApp();
+  const { applicants, schools, catalogSchools, schoolYears } = useApp();
   const { onMenuClick } = useOutletContext() || {};
   const [selectedReport, setSelectedReport] = useState(null);
   const [liveSummary, setLiveSummary] = useState(null);
@@ -376,6 +376,26 @@ export default function Reports() {
       return true;
     });
   };
+
+  // HEI options: the eligible-schools catalog (managed in System Settings,
+  // Firestore-backed) PLUS any school name that actually appears on a scholar
+  // record. Scholar records store the full catalog name (e.g. "Luna Goco
+  // Colleges, Inc."), not the old hardcoded short names ("Luna Colleges") that
+  // used to live here — using those meant every HEI-filtered/per-HEI report
+  // matched zero records. Mirrors the same fix already applied in Scholars.jsx.
+  const schoolOptions = Array.from(new Set([
+    ...(catalogSchools || []).map(s => s?.name).filter(Boolean),
+    ...applicants.map(a => a?.school).filter(Boolean),
+  ])).sort((a, b) => a.localeCompare(b));
+
+  // Academic Year options: the School Year Management catalog (Firestore-backed)
+  // PLUS any schoolYear label that actually appears on a scholar record, so a
+  // newly-added or historical year is always selectable — same pattern as
+  // schoolOptions above.
+  const academicYearOptions = Array.from(new Set([
+    ...(schoolYears || []).map(sy => sy?.label).filter(Boolean),
+    ...applicants.map(a => a?.schoolYear).filter(Boolean),
+  ])).sort((a, b) => a.localeCompare(b));
 
   // Report Generation Functions
   const generateMasterListAll = () => {
