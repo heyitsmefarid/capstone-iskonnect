@@ -815,20 +815,21 @@ export default function Reports() {
       const remaining = Math.max(allocated - disbursed, 0);
 
       return {
-        'HEI': school.name,
+        'HEI': schoolName,
         'Allocated Funds': `₱${allocated.toLocaleString()}`,
         'Released Funds': `₱${disbursed.toLocaleString()}`,
         'Remaining Funds': `₱${remaining.toLocaleString()}`,
       };
     });
 
+    const totalAllocated = byHEI.reduce((sum, row) => sum + Number(row['Allocated Funds'].replace(/[₱,]/g, '')), 0);
     const totalDisbursed = byHEI.reduce((sum, row) => sum + Number(row['Released Funds'].replace(/[₱,]/g, '')), 0);
-    const remaining = TOTAL_BUDGET - totalDisbursed;
-    const utilizationRate = TOTAL_BUDGET > 0 ? ((totalDisbursed / TOTAL_BUDGET) * 100).toFixed(1) : '0.0';
+    const remaining = totalAllocated - totalDisbursed;
+    const utilizationRate = totalAllocated > 0 ? ((totalDisbursed / totalAllocated) * 100).toFixed(1) : '0.0';
 
     return byHEI.map(row => ({
       ...row,
-      'Total Program Budget': `₱${TOTAL_BUDGET.toLocaleString()}`,
+      'Total Program Budget': `₱${totalAllocated.toLocaleString()}`,
       'Overall Remaining Budget': `₱${remaining.toLocaleString()}`,
       'Utilization Rate': `${utilizationRate}%`,
     }));
