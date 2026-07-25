@@ -488,7 +488,7 @@ export default function Reports() {
     const scholars = getFilteredScholars().filter(s => s.status === 'active' || s.status === 'approved');
     return scholars.map(s => ({
       'Academic Year': s.schoolYear || filterAY || 'All',
-      'Semester': filterSemester || '1st Semester',
+      'Semester': s.semester || filterSemester || 'N/A',
       'Scholar Name': `${s.firstName} ${s.lastName}`,
       'HEI': s.school,
       'Tuition Fee': `₱${(s.tuitionFee || 0).toLocaleString()}`,
@@ -645,7 +645,7 @@ export default function Reports() {
       'HEI': s.school,
       'Program': s.program,
       'Units Enrolled': s.unitsEnrolled || 'N/A',
-      'Semester': filterSemester || '1st Semester',
+      'Semester': s.semester || filterSemester || 'N/A',
       'Academic Year': s.schoolYear || filterAY || 'All',
       'Enrollment Status': s.enrollmentStatus || (s.status === 'terminated' ? 'Not Enrolled' : 'Verified'),
     }));
@@ -664,7 +664,7 @@ export default function Reports() {
       return {
         'Scholar Name': `${s.firstName} ${s.lastName}`,
         'HEI': s.school,
-        'Semester': filterSemester || '1st Semester',
+        'Semester': s.semester || filterSemester || 'N/A',
         'Approved Amount': `₱${approvedAmount.toLocaleString()}`,
         'Amount Released': `₱${released.toLocaleString()}`,
         'Balance': `₱${balance.toLocaleString()}`,
