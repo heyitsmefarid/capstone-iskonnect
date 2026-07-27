@@ -990,6 +990,40 @@ class _PastGradesTab extends ConsumerWidget {
   }
 }
 
+/// Label/icon/colors for a subject's action button: an ungraded subject
+/// needs a grade input (highlighted so it stands out as something still to
+/// do); an already graded subject just needs a lighter "Edit" affordance.
+class SubjectActionButtonStyle {
+  final String label;
+  final IconData icon;
+  final Color foreground;
+  final Color background;
+
+  const SubjectActionButtonStyle({
+    required this.label,
+    required this.icon,
+    required this.foreground,
+    required this.background,
+  });
+}
+
+SubjectActionButtonStyle subjectActionButtonStyle(GradeModel grade) {
+  if (grade.grade == null) {
+    return const SubjectActionButtonStyle(
+      label: 'Input Grade',
+      icon: Icons.grade_outlined,
+      foreground: AppColors.warning,
+      background: AppColors.warningLight,
+    );
+  }
+  return const SubjectActionButtonStyle(
+    label: 'Edit',
+    icon: Icons.edit_outlined,
+    foreground: AppColors.info,
+    background: AppColors.infoLight,
+  );
+}
+
 class _SubjectCard extends ConsumerWidget {
   final GradeModel grade;
   final bool showGrade;
@@ -1144,6 +1178,7 @@ class _SubjectCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final actionStyle = subjectActionButtonStyle(grade);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -1271,22 +1306,22 @@ class _SubjectCard extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                backgroundColor: AppColors.infoLight,
+                backgroundColor: actionStyle.background,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              icon: const Icon(
-                Icons.edit_outlined,
+              icon: Icon(
+                actionStyle.icon,
                 size: 14,
-                color: AppColors.info,
+                color: actionStyle.foreground,
               ),
-              label: const Text(
-                'Edit',
+              label: Text(
+                actionStyle.label,
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.info,
+                  color: actionStyle.foreground,
                 ),
               ),
             ),
