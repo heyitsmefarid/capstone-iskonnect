@@ -27,20 +27,12 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _subjectCodeController = TextEditingController();
   final _subjectNameController = TextEditingController();
-  final _gradeController = TextEditingController();
   String _selectedSemester = '1st Semester';
   String _selectedAcademicYear = '2025-2026';
   int _selectedUnits = 3;
-  String _selectedRemarks = 'Passed';
   bool _isLoading = false;
 
   final List<int> _units = [1, 2, 3, 4, 5, 6];
-  final List<String> _remarksOptions = [
-    'Passed',
-    'Failed',
-    'Incomplete',
-    'Other',
-  ];
 
   String get _selectedPeriodKey => buildAcademicPeriodKey(
     academicYear: _selectedAcademicYear,
@@ -71,29 +63,11 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
   void dispose() {
     _subjectCodeController.dispose();
     _subjectNameController.dispose();
-    _gradeController.dispose();
     super.dispose();
   }
 
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
-
-    // COR is uploaded separately (Add COR screen) and is no longer required
-    // when adding a subject.
-    final gradeText = _gradeController.text.trim();
-    double? parsedGrade;
-
-    if (gradeText.isNotEmpty) {
-      parsedGrade = double.tryParse(gradeText);
-      if (parsedGrade == null) {
-        DialogHelper.showWarningDialog(
-          context: context,
-          title: 'Invalid Grade',
-          message: 'Please enter a valid numeric grade.',
-        );
-        return;
-      }
-    }
 
     setState(() => _isLoading = true);
 
@@ -110,8 +84,8 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
             semester: _selectedSemester,
             academicYear: _selectedAcademicYear,
             units: _selectedUnits,
-            grade: parsedGrade,
-            remarks: _selectedRemarks,
+            grade: null,
+            remarks: null,
           ),
         );
 
@@ -235,7 +209,7 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
                       child: Text(
                         widget.corOnly
                             ? 'Upload your Certificate of Registration for the selected semester.'
-                            : 'Add your subject details. You can also provide a grade now if available.',
+                            : "Add your subject details. You can input the grade once it's released.",
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.info,
@@ -274,16 +248,6 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
                   validator: Validators.required,
                 ),
                 const SizedBox(height: 16),
-                CustomTextField(
-                  controller: _gradeController,
-                  label: 'Grade (Optional)',
-                  hint: 'e.g., 1.50',
-                  prefixIcon: Icons.grade_outlined,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                ),
-                const SizedBox(height: 16),
                 CustomDropdown<int>(
                   label: 'Units',
                   value: _selectedUnits,
@@ -297,19 +261,6 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
                       .toList(),
                   onChanged: (value) {
                     setState(() => _selectedUnits = value ?? _selectedUnits);
-                  },
-                ),
-                const SizedBox(height: 16),
-                CustomDropdown<String>(
-                  label: 'Remarks',
-                  value: _selectedRemarks,
-                  items: _remarksOptions
-                      .map(
-                        (r) => DropdownMenuItem(value: r, child: Text(r)),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedRemarks = value ?? _selectedRemarks);
                   },
                 ),
                 const SizedBox(height: 32),
