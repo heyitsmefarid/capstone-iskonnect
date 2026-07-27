@@ -98,3 +98,34 @@ icon) is unchanged and applies to this button exactly as it does today.
   SizedBox.shrink()`); nothing here is graded.
 - No changes to COR/COG upload flows in `add_grade_screen.dart` — those are
   separate branches of the same widget, untouched by this change.
+
+## Corrections discovered during implementation
+
+This spec's "Context" section above was written by reading the working tree,
+which already had substantial separate, unrelated uncommitted work applied
+on top of the actual last commit (a COG upload feature, a field-label
+rename, and other in-progress changes). The final implementation targeted
+the true committed base instead, which differs from what's described above:
+
+- The actual committed field labels are **"Subject Code"/"Subject Name"**,
+  not "Course Code"/"Course Name" (that rename is part of the separate,
+  still-uncommitted work).
+- The actual committed Grade field was already optional
+  (`label: 'Grade (Optional)'`, no validator) with a looser banner ("You can
+  also provide a grade now if available."), not the "Grade is required to
+  submit" behavior described above (that stricter behavior is also part of
+  the separate uncommitted work).
+- `AddGradeScreen` had no `cogOnly` mode at the true commit — the
+  `!widget.corOnly && !widget.cogOnly` condition in this spec assumed a
+  `cogOnly` field that doesn't exist there.
+- `_showEditDialog` (the button this plan's Task 2 makes grade-aware) does
+  save with an empty grade at the true commit — this spec's claim that it
+  "already requires a grade to save" was true only of the uncommitted
+  working-tree version. The implementation was left matching the true
+  commit's actual (optional-grade) behavior rather than introducing new
+  validation logic that would duplicate the separate work already adding it.
+
+None of this changed what was built — the implementation targets the real
+base file's actual content — only this document's background description
+was inaccurate. See the plan document's own "Corrections" section for the
+implementation-level detail.

@@ -661,3 +661,41 @@ If `git diff --cached scholar-ui11/lib/features/grades/screens/grades_screen.dar
 
 - [ ] Run `flutter analyze` (from `scholar-ui11/`) and confirm no new errors/warnings were introduced by these changes.
 - [ ] Confirm both commits from this plan are present: `git log --oneline -2`.
+
+## Corrections discovered during implementation
+
+Both tasks' "before" code blocks above were transcribed from the working
+tree at brainstorming time, which already carried substantial separate,
+unrelated uncommitted work (a COG upload feature in `add_grade_screen.dart`;
+a `locked`/admin-confirmed-grades feature, a Remarks field, and validation
+changes in `grades_screen.dart`'s edit dialog). The actual implementation
+targeted the true last-committed state instead, which differs from what's
+shown above in a few places:
+
+- **Task 1's real base** had no `cogOnly` field/mode, no `_handleCogUpload`,
+  and different `_handleSubmit` grade-validation logic than shown (an extra
+  invalid-grade warning dialog, since removed along with the rest of the
+  grade-parsing block). Field labels are "Subject Code"/"Subject Name," not
+  "Course Code"/"Course Name" — Task 1's shipped test asserts field count and
+  behavior rather than that incidental label text, for exactly this reason.
+- **Task 1's test** does not override `activeAcademicPeriodProvider`
+  (unlike an earlier attempt at this task) — the real committed
+  `grades_provider.dart` declares it as a `FutureProvider`, not the
+  `StreamProvider` an override matching the working tree's shape would
+  require; the override was dropped entirely since `_loadActivePeriod()`
+  already falls back to the same default values on any failure.
+- **Task 2's real base** had no `locked` branch and no Remarks field in
+  `_showEditDialog` — Task 2's commit does not touch `_showEditDialog`'s
+  internals at all, only the outer action button, so the dialog it opens
+  still reflects the true committed (optional-grade) behavior rather than
+  the stricter working-tree version. This is a known, accepted gap: the
+  "Input Grade" button's promise isn't fully enforced until the user's own
+  separate work (which already adds that validation) is committed.
+
+Both final commits were independently verified to compile and pass their
+own tests in complete isolation (a detached `git worktree` checkout with no
+working-tree overlay) — not just against the working tree, which was not
+sufficient to catch either of the above (the working tree already has the
+missing symbols/behavior these corrections describe). Full detail of how
+each was found is in the plan's ledger,
+`.superpowers/sdd/2026-07-26-subject-grade-input-split/progress.md`.
