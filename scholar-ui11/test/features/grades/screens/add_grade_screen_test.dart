@@ -2,20 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
-import 'package:iskonnectttt/features/grades/providers/grades_provider.dart';
 import 'package:iskonnectttt/features/grades/screens/add_grade_screen.dart';
 import 'package:iskonnectttt/shared/widgets/custom_button.dart';
 
+// activeAcademicPeriodProvider is deliberately NOT overridden here: without
+// Firebase initialized its real implementation throws, which
+// AddGradeScreen._loadActivePeriod() already catches and falls back to its
+// own hardcoded defaults - the same values an override would inject. Not
+// overriding it also keeps this test agnostic to that provider's exact
+// shape (Future vs Stream), which is mid-change in unrelated, separate
+// uncommitted work.
 Future<void> _pumpAddSubjectScreen(WidgetTester tester) {
   return tester.pumpWidget(
     ProviderScope(
       overrides: [
         currentStudentProvider.overrideWithValue(null),
-        activeAcademicPeriodProvider.overrideWith(
-          (ref) => Stream.value(
-            const ActiveAcademicPeriod('2025-2026', '1st Semester'),
-          ),
-        ),
       ],
       child: const MaterialApp(home: AddGradeScreen()),
     ),
