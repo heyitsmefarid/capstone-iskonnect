@@ -6,6 +6,9 @@ const { AppError, handleError } = require('../utils/errors');
 const { COLLECTIONS, ROLES, AUDIT_ACTIONS } = require('../constants/collections');
 const { writeAuditLog } = require('../utils/audit');
 const { isValidEmail } = require('../utils/validation');
+const { computeGrantSchoolYear } = require('../utils/scholarshipYear');
+const { generateTemporaryPassword } = require('../utils/temporaryPassword');
+const { getCurrentSchoolYearAndSemester } = require('../utils/currentTerm');
 
 // The admin panel signs in to Firebase ANONYMOUSLY (its admin/staff login is an
 // app-level session, not a Firebase identity with an admin claim), so this
@@ -13,14 +16,6 @@ const { isValidEmail } = require('../utils/validation');
 // functions. Instead it requires a shared secret in the `x-admin-key` header.
 // Override in production via the ADMIN_IMPORT_KEY function env var.
 const ADMIN_IMPORT_KEY = process.env.ADMIN_IMPORT_KEY || 'ced-admin-import-2026';
-
-// Academic year granted is derived from how many semesters a scholar has
-// already used (2 semesters = 1 academic year).
-const SEMESTERS_PER_YEAR = 2;
-
-// Temporary password = capitalized last name + this fixed, policy-compliant
-// suffix (upper + lower + digit + special, >= 8 chars). e.g. "Gallano@Ced2026".
-const PASSWORD_SUFFIX = '@Ced2026';
 
 // Case-insensitive lookup so minor header variations still map.
 function pick(row, ...keys) {
@@ -65,18 +60,6 @@ function splitName(full) {
   };
 }
 
-function makePassword(lastName, firstName) {
-  const base = String(lastName || firstName || 'Scholar').replace(/[^a-zA-Z]/g, '');
-  const cap = base ? base[0].toUpperCase() + base.slice(1).toLowerCase() : 'Scholar';
-  return `${cap}${PASSWORD_SUFFIX}`;
-}
-
-function computeGrantYear(semesters) {
-  const now = new Date().getFullYear();
-  const yearsElapsed = Math.floor((Number(semesters) || 0) / SEMESTERS_PER_YEAR);
-  return now - yearsElapsed;
-}
-
 // Finds the next free `YYYY-NNNNN` scholar-id sequence for the current year by
 // reading the highest existing one (single indexed range query, no full scan).
 async function nextScholarIdSeq(db, yearPrefix) {
@@ -98,8 +81,12 @@ async function nextScholarIdSeq(db, yearPrefix) {
 }
 
 // POST /bulkCreateScholars
-// Body: { rows: [{ "Full Name", "Email", "School", "Program", "Year Level",
-//                  "Number of Semesters", "Status" }, ...] }
+// Body: { rows: [{ "Scholar ID" (optional), "First Name", "Middle Name"
+//                  (optional), "Last Name", "Email", "School", "Program",
+//                  "Year Level", "Status", "Total Scholarship Semesters",
+//                  "Active Scholarship Semesters" }, ...] }
+// A legacy single "Full Name" column (instead of First/Last Name) is still
+// accepted as a fallback (see splitName() below).
 // Creates a Firebase Auth account + active scholar `users` doc for each row.
 // The client sends rows in modest chunks so a large migration never hits the
 // function timeout, and accumulates the per-row results (incl. temp passwords).
@@ -120,16 +107,33 @@ exports.bulkCreateScholars = onRequest(
       const yearPrefix = new Date().getFullYear();
       let seq = await nextScholarIdSeq(db, yearPrefix);
 
+      // Every row's grant-year computation steps backward from THIS one
+      // current term, fetched once per invocation (not per row).
+      const currentTerm = await getCurrentSchoolYearAndSemester(db);
+      if (!currentTerm) throw new AppError('No active school year/semester is configured.', 400, 'NO_ACTIVE_TERM');
+
       let created = 0;
       let skipped = 0;
       let failed = 0;
       const results = [];
 
       for (const row of rows) {
-        const fullName = pick(row, 'Full Name', 'Name', 'Scholar Name');
         const email = pick(row, 'Email', 'Email Address').toLowerCase();
+        let fullName = '';
         try {
-          if (!fullName) throw new Error('Missing Full Name');
+          const firstNameCol = pick(row, 'First Name', 'Given Name');
+          const lastNameCol = pick(row, 'Last Name', 'Surname');
+          let firstName, middleName, lastName;
+          if (firstNameCol || lastNameCol) {
+            firstName = firstNameCol;
+            middleName = pick(row, 'Middle Name');
+            lastName = lastNameCol;
+          } else {
+            // Legacy single-column file support.
+            ({ firstName, middleName, lastName } = splitName(pick(row, 'Full Name', 'Name', 'Scholar Name')));
+          }
+          fullName = [firstName, middleName, lastName].filter(Boolean).join(' ');
+          if (!fullName.trim()) throw new Error('Missing First Name/Last Name (or Full Name)');
           if (!isValidEmail(email)) throw new Error('Invalid or missing email');
 
           // Skip if an Auth account already exists for this email.
@@ -144,16 +148,29 @@ exports.bulkCreateScholars = onRequest(
             continue;
           }
 
-          const { firstName, middleName, lastName } = splitName(fullName);
-          const password = makePassword(lastName, firstName);
           const onHold = pick(row, 'Status').toLowerCase().includes('hold');
           const adminStatus = onHold ? 'on-hold' : 'active';
           const scholarshipStatus = onHold ? 'On Hold' : 'Active';
-          const semesters = parseInt(pick(row, 'Number of Semesters', 'No. of Semesters', 'Semesters'), 10) || 0;
           const yearLevel = String(parseInt(pick(row, 'Year Level', 'Year'), 10) || 1);
-          const grantYear = computeGrantYear(semesters);
-          const academicYear = `${grantYear}-${grantYear + 1}`;
+
+          const totalScholarshipSemesters = parseInt(pick(row, 'Total Scholarship Semesters'), 10) || 0;
+          const activeScholarshipSemesters = parseInt(pick(row, 'Active Scholarship Semesters'), 10) || 0;
+          if (activeScholarshipSemesters < 1) throw new Error('Active Scholarship Semesters must be at least 1');
+          const grantSchoolYear = computeGrantSchoolYear(currentTerm.yearStart, currentTerm.semesterIndex, activeScholarshipSemesters);
+          const yearAwarded = Number(grantSchoolYear.split('-')[0]);
+          // academicYear previously shared its value with yearAwarded (both
+          // derived from the old computeGrantYear() approximation) — keep
+          // that same coupling, now driven by the precise algorithm above.
+          const academicYear = grantSchoolYear;
+
           const scholarId = `${yearPrefix}-${String(seq++).padStart(5, '0')}`;
+          const suppliedScholarId = pick(row, 'Scholar ID');
+          if (suppliedScholarId) {
+            const dupSnap = await db.collection(COLLECTIONS.USERS).where('scholarId', '==', suppliedScholarId).limit(1).get();
+            if (!dupSnap.empty) throw new Error(`Scholar ID ${suppliedScholarId} already exists`);
+          }
+
+          const password = generateTemporaryPassword(lastName, grantSchoolYear);
 
           const userRecord = await auth.createUser({
             email,
@@ -181,10 +198,17 @@ exports.bulkCreateScholars = onRequest(
             scholarshipStatus,
             adminStatus,
             applicationStatus: 'approved',
-            semestersCompleted: semesters,
-            semestersUsed: semesters,
-            scholarId,
-            yearAwarded: grantYear,
+            semestersCompleted: activeScholarshipSemesters,
+            semestersUsed: activeScholarshipSemesters,
+            scholarId: suppliedScholarId || scholarId, // existing auto-generated scholarId used only when not supplied
+            uid: userRecord.uid,
+            totalScholarshipSemesters,
+            grantSchoolYear,
+            yearAwarded, // replaces the old computeGrantYear() value — same field, new derivation
+            mustChangePassword: true,
+            activatedAt: null,
+            lastLogin: null,
+            passwordChangedAt: null,
             amountGranted: 0,
             emailVerified: true,
             status: 'active',
@@ -202,7 +226,7 @@ exports.bulkCreateScholars = onRequest(
           });
 
           created++;
-          results.push({ email, fullName, scholarId, password, status: 'created' });
+          results.push({ email, fullName, scholarId: suppliedScholarId || scholarId, password, status: 'created' });
         } catch (e) {
           failed++;
           results.push({ email, fullName, status: 'failed', reason: e.message || 'Unknown error' });
