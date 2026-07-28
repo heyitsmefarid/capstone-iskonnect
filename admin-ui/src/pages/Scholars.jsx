@@ -35,6 +35,16 @@ import { matchesExact, matchesSearch } from '../utils/filtering';
 import { bulkCreateScholars } from '../services/backendApi';
 import { validateImportRows } from '../utils/scholarImportValidation';
 
+// SweetAlert2's `html:` option renders via innerHTML (unlike `text:`, which is
+// escaped automatically) — any Firestore- or uploaded-file-derived value
+// interpolated into an `html:` string must be escaped first, or a crafted
+// name/cell value (e.g. `<img src=x onerror=...>`) executes as HTML/JS in the
+// admin's browser the moment the dialog opens.
+const escapeHtml = (value) =>
+  String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+
 export default function Scholars() {
   const { applicants, catalogSchools, catalogPrograms, updateApplicant, verifyScholarEnrollment, systemSettings, schoolYears } = useApp();
   const numberOfSemesters = systemSettings?.numberOfSemesters || 8;
@@ -313,7 +323,7 @@ export default function Scholars() {
   const handleReactivate = async (scholar) => {
     const result = await Swal.fire({
       title: 'Reactivate scholar?',
-      html: `<b>${scholar.firstName} ${scholar.lastName}</b> will be moved back to <b>Active</b> and regain access to their scholarship.`,
+      html: `<b>${escapeHtml(scholar.firstName)} ${escapeHtml(scholar.lastName)}</b> will be moved back to <b>Active</b> and regain access to their scholarship.`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Reactivate',
@@ -549,8 +559,8 @@ export default function Scholars() {
               ${validated.map((r) => `
                 <tr style="color:${r.valid ? (r.warnings.length ? '#b8860b' : '#2e7d32') : '#c62828'}">
                   <td>${r.index + 1}</td>
-                  <td>${r.row['First Name'] || ''} ${r.row['Last Name'] || ''}</td>
-                  <td>${r.errors.concat(r.warnings).join('; ') || 'OK'}</td>
+                  <td>${escapeHtml(r.row['First Name'])} ${escapeHtml(r.row['Last Name'])}</td>
+                  <td>${escapeHtml(r.errors.concat(r.warnings).join('; ')) || 'OK'}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
