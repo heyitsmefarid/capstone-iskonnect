@@ -1,4 +1,9 @@
-const DEFAULT_BASE_URL = 'http://127.0.0.1:5001/demo-capstone/us-central1';
+// Deployed `iskonnect-15238` functions in us-central1, matching the scholar
+// app's ApiConfig.functionsBaseUrl default. `npm run dev:emu` overrides this
+// via VITE_BACKEND_BASE_URL (see .env.emulator) to point at the local
+// Functions emulator instead — this default must stay the real deployment,
+// since plain `npm run dev` has no emulator running to fall back to.
+const DEFAULT_BASE_URL = 'https://us-central1-iskonnect-15238.cloudfunctions.net';
 
 function getBaseUrl() {
   return (import.meta.env.VITE_BACKEND_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
@@ -190,6 +195,22 @@ export async function bulkCreateScholars(rows) {
     method: 'POST',
     headers: { 'x-admin-key': ADMIN_IMPORT_KEY },
     body: { rows },
+  });
+}
+
+// Re-derives and resets a scholar's temp password (lastName + grantSchoolYear),
+// forcing a change again on next login. Returns { success, password }.
+export async function regenerateScholarPassword({ targetUid }) {
+  return requestJson('/regenerateScholarPassword', {
+    method: 'POST', headers: { 'x-admin-key': ADMIN_IMPORT_KEY }, body: { targetUid },
+  });
+}
+
+// Disables/re-enables a scholar's Firebase Auth account (mirrored into
+// Firestore's accountDisabled field for admin UI filtering). Returns { success }.
+export async function setScholarAccountDisabled({ targetUid, disabled }) {
+  return requestJson('/setScholarAccountDisabled', {
+    method: 'POST', headers: { 'x-admin-key': ADMIN_IMPORT_KEY }, body: { targetUid, disabled },
   });
 }
 

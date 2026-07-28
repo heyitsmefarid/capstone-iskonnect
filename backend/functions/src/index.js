@@ -50,6 +50,9 @@ const {
 // Bulk scholar account creation (Excel import of current scholars)
 const { bulkCreateScholars } = require('./http/scholarImport');
 
+// Scholar account management (regenerate temp password, enable/disable)
+const { regenerateScholarPassword, setScholarAccountDisabled } = require('./http/scholarAccountManagement');
+
 // Email verification
 const {
   sendEmailOTP,
@@ -125,6 +128,8 @@ exports.updateUserRole = updateUserRole;
 exports.deactivateUser = deactivateUser;
 exports.getAuditLogs = getAuditLogs;
 exports.bulkCreateScholars = bulkCreateScholars;
+exports.regenerateScholarPassword = regenerateScholarPassword;
+exports.setScholarAccountDisabled = setScholarAccountDisabled;
 
 // Email verification
 exports.sendEmailOTP = sendEmailOTP;
