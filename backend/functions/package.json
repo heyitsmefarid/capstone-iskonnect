@@ -8,6 +8,7 @@
   "main": "src/index.js",
   "scripts": {
     "lint": "echo \"No lint configured\"",
+    "test": "node --test src/utils",
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
     "seed:emulator": "node scripts/seedEmulator.js",
