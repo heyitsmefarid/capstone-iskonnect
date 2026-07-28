@@ -5,6 +5,7 @@ import { initializeFirebase } from '../services/firebase';
 import { logAudit } from '../services/auditLog';
 import { DEFAULT_SCHOOLS, DEFAULT_PROGRAMS } from '../services/localSettingsStore';
 import { syncCatalogToFirestore } from '../services/seedFirestoreCatalog';
+import { matchesExact } from '../utils/filtering';
 
 const AppContext = createContext();
 const SCHOLARSHIP_CAP = 25000;
@@ -14,17 +15,25 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const computeReflectedAmount = (tuitionFee) => {
+// Caps at the SPECIFIC program's configured Tuition Cap (from the real
+// School/Program catalog) when a match is found, falling back to the flat
+// SCHOLARSHIP_CAP otherwise — same matching order as resolvePerSemGrant, so
+// every place that reflects a grant amount agrees with each other.
+const computeReflectedAmount = (tuitionFee, school, program, programs = []) => {
   const normalizedTuition = Math.max(0, toNumber(tuitionFee));
-  return Math.min(normalizedTuition, SCHOLARSHIP_CAP);
+  const match =
+    programs.find((p) => p.name === program && p.school === school) ||
+    programs.find((p) => p.name === program);
+  const cap = match?.tuitionCap != null ? Math.max(0, toNumber(match.tuitionCap)) : SCHOLARSHIP_CAP;
+  return Math.min(normalizedTuition, cap);
 };
 
-const normalizeApplicantFinancialFields = (applicant) => {
+const normalizeApplicantFinancialFields = (applicant, programs = []) => {
   const tuitionFee = Math.max(0, toNumber(applicant?.tuitionFee));
   return {
     ...applicant,
     tuitionFee,
-    amountGranted: computeReflectedAmount(tuitionFee),
+    amountGranted: computeReflectedAmount(tuitionFee, applicant?.school, applicant?.program, programs),
   };
 };
 
@@ -220,10 +229,22 @@ const mapStudentToApplicant = (student) => {
     // Admin-managed fields are persisted on the Firestore user doc so they
     // survive refreshes and sync across devices.
     scholarId: student.scholarId ?? null,
+    uid: student.uid ?? null,
+    accountDisabled: student.accountDisabled === true,
     ranking: student.ranking ?? null,
     attendance: Array.isArray(student.attendance) ? student.attendance : [],
     grades: Array.isArray(student.grades) ? student.grades : [],
-    certificatesOfEnrollment: Array.isArray(student.certificatesOfEnrollment) ? student.certificatesOfEnrollment : [],
+    // Certificates of Grades the scholar uploads per semester (carries fileUrl).
+    cogSubmissions: Array.isArray(student.cogSubmissions) ? student.cogSubmissions : [],
+    // Admin's per-semester grade confirmation/evaluation, keyed by
+    // `${schoolYear}::${semester}`.
+    gradesEvaluation:
+      student.gradesEvaluation && typeof student.gradesEvaluation === 'object'
+        ? student.gradesEvaluation
+        : {},
+    // COR uploads — the scholar app writes these under `corSubmissions`
+    // (see CorSubmissionsNotifier in grades_provider.dart).
+    corSubmissions: Array.isArray(student.corSubmissions) ? student.corSubmissions : [],
     // Semesters the scholar has been enrolled into as the admin advanced the
     // active term. Drives Semester Records and Granted-per-Semester.
     enrolledSemesters: Array.isArray(student.enrolledSemesters) ? student.enrolledSemesters : [],
@@ -234,6 +255,20 @@ const mapStudentToApplicant = (student) => {
     interviewStatus: student.interviewStatus ?? null,
     gwa: student.gwa ?? null,
     semestersUsed: student.semestersUsed ?? 0,
+    // Every (schoolYear::semester) this scholar's Semesters Used has already
+    // been advanced for — a set, not just the most recent one, so
+    // re-activating an *earlier* already-counted term (e.g. an admin
+    // toggling back and forth while testing, or correcting a mistake) is
+    // correctly a no-op instead of counting it again. Without persisting
+    // this, the Firestore listener echoes back a version missing it, the
+    // idempotency check in enrollActiveScholarsInSemester never holds, and
+    // the count runs away on every snapshot update.
+    countedTerms: Array.isArray(student.countedTerms) ? student.countedTerms : [],
+    // Legacy single-value marker, read-only here — only used by the one-time
+    // migration below to reconstruct `countedTerms` for scholars who predate
+    // it. Never written back (buildUserDocFromApplicant no longer persists
+    // it); safe to ignore once every scholar has been migrated.
+    legacyLastCountedTerm: student.lastCountedTerm ?? null,
     disbursementStatus: student.disbursementStatus ?? null,
     tuitionFee: student.tuitionFee ?? 0,
     amountGranted: student.amountGranted ?? 0,
@@ -241,6 +276,12 @@ const mapStudentToApplicant = (student) => {
     // Set when an admin restores a scholar from history — exempts them from the
     // 8-semester auto-graduation so a restored graduate stays active.
     gradExempt: student.gradExempt === true,
+    // Admin's manual confirmation that the scholar is enrolled for the term —
+    // 'Verified' unlocks Add COG/COR/Subject on the scholar app's Grades screen.
+    enrollmentStatus: student.enrollmentStatus ?? null,
+    // Why the admin marked the scholar as not enrolled, when enrollmentStatus
+    // is 'Not Enrolled'.
+    enrollmentNotEnrolledReason: student.enrollmentNotEnrolledReason ?? null,
   };
 };
 
@@ -278,6 +319,9 @@ const buildUserDocFromApplicant = (applicant) => {
     // The scholar app reads `semestersCompleted` for its "x/8 sem" badge, so
     // keep it in lockstep with the admin's semestersUsed.
     semestersCompleted: applicant.semestersUsed ?? 0,
+    // Must be persisted — see the matching field in mapStudentToApplicant
+    // for why dropping this causes a runaway increment loop.
+    countedTerms: Array.isArray(applicant.countedTerms) ? applicant.countedTerms : [],
     disbursementStatus: applicant.disbursementStatus ?? null,
     tuitionFee: applicant.tuitionFee ?? 0,
     amountGranted: applicant.amountGranted ?? 0,
@@ -286,8 +330,16 @@ const buildUserDocFromApplicant = (applicant) => {
     semester: applicant.semester ?? '1st Semester',
     attendance: Array.isArray(applicant.attendance) ? applicant.attendance : [],
     grades: Array.isArray(applicant.grades) ? applicant.grades : [],
+    // Admin's per-semester grade confirmation/evaluation, persisted so it
+    // survives refresh and is readable by the scholar app.
+    gradesEvaluation:
+      applicant.gradesEvaluation && typeof applicant.gradesEvaluation === 'object'
+        ? applicant.gradesEvaluation
+        : {},
     enrolledSemesters: Array.isArray(applicant.enrolledSemesters) ? applicant.enrolledSemesters : [],
     gradExempt: applicant.gradExempt ?? false,
+    enrollmentStatus: applicant.enrollmentStatus ?? null,
+    enrollmentNotEnrolledReason: applicant.enrollmentNotEnrolledReason ?? null,
   };
 
   // Identity/profile fields are only written when present, so a sync never
@@ -328,10 +380,47 @@ const syncApplicantToFirestore = async (applicant) => {
 };
 
 // ── History / Archiving ──────────────────────────────────────────────────
-// Statuses that move a record out of the active lists and into the History
-// module. Rejected applicants go to Applicant History; graduated/terminated
-// scholars go to Scholar History.
-const ARCHIVE_STATUSES = ['rejected', 'graduated', 'terminated'];
+// Only rejected applicants are immediately archived on status change.
+// Graduated/terminated scholars stay in the list until the semester ends
+// (endOfSemesterScholarsCleanup moves them to Scholar History at that point).
+const ARCHIVE_STATUSES = ['rejected'];
+
+// A subject is considered failing/INC based solely on its remarks field.
+// Any remarks value other than "Passed" (e.g. Failed, Incomplete, Other)
+// puts the scholar on hold — numeric grade is not used for this decision.
+// When `term` is given, only that (schoolYear, semester)'s entries are
+// checked — a failing grade from an already-closed semester shouldn't keep
+// evaluating (and blocking reactivation) once a new term has started.
+const hasFailingOrIncGrades = (grades, term = null) => {
+  const relevant = term
+    ? (grades || []).filter((e) => e.schoolYear === term.schoolYear && e.semester === term.semester)
+    : (grades || []);
+  return relevant.some((entry) =>
+    (entry.subjects || []).some((sub) => {
+      const r = String(sub.remarks || '').trim().toUpperCase();
+      return r !== '' && r !== 'PASSED';
+    })
+  );
+};
+
+// An event only counts toward absence once its end time has actually
+// passed — a scholar shouldn't be marked absent for an event that's still
+// upcoming or in progress. Events without an endTime (saved before this
+// field existed) fall back to end-of-day. Mirrors the same helper in
+// Attendance.jsx.
+const hasEventEnded = (event) => {
+  if (!event?.date) return false;
+  const endDateTime = new Date(`${event.date}T${event.endTime || '23:59'}:00`);
+  if (Number.isNaN(endDateTime.getTime())) return false;
+  return Date.now() > endDateTime.getTime();
+};
+
+// Chronological sort key for a (schoolYear, semester) term — used to order
+// and range-filter terms when reconstructing a scholar's semester history.
+const termSortKey = (schoolYear, semester) => {
+  const year = parseInt(String(schoolYear).split('-')[0], 10) || 0;
+  return year * 10 + (semester === '2nd Semester' ? 2 : 1);
+};
 
 // Human-readable reason for why an applicant landed in Applicant History.
 const APPLICANT_ARCHIVE_REASONS = {
@@ -390,10 +479,6 @@ const initialSchools = [
   { id: 7, name: 'St. Augustine Academy', code: 'SAA', tuitionCap: 25000, specialCase: 'gradesOnly' },
 ];
 
-// No seeded sample activities — real activities come from admin-created events
-// and QR-scanned attendance records.
-const initialActivities = [];
-
 const SYSTEM_SETTINGS_STORAGE_KEY = 'ced-system-settings';
 const defaultSystemSettings = {
   organizationName: 'City Education Department',
@@ -401,6 +486,7 @@ const defaultSystemSettings = {
   defaultAcademicYear: '2026-2027',
   defaultSemester: '1st Semester',
   tuitionFeeDefault: 25000,
+  numberOfSemesters: 8,
   academicPrograms: [
     'Bachelor of Science in Nursing',
     'Bachelor of Science in Information Technology',
@@ -451,6 +537,16 @@ export function AppProvider({ children }) {
   useEffect(() => {
     schoolYearsRef.current = schoolYears;
   }, [schoolYears]);
+
+  // The currently active School Year + Semester, or null if none configured.
+  // Used to scope grade/attendance evaluation to the term that's actually
+  // running, instead of a scholar's entire history.
+  const getActiveTerm = () => {
+    const activeSy = schoolYearsRef.current.find((s) => s.isActive);
+    const activeSem = activeSy?.semesters?.find((s) => s.isActive);
+    return activeSy && activeSem ? { schoolYear: activeSy.label, semester: activeSem.name } : null;
+  };
+
   const [schools, setSchools] = useState(initialSchools);
   // Eligible schools/programs catalog — Firestore-backed so edits made in one
   // browser reach every admin device and the scholar app (which reads the same
@@ -463,7 +559,10 @@ export function AppProvider({ children }) {
   useEffect(() => {
     catalogProgramsRef.current = catalogPrograms;
   }, [catalogPrograms]);
-  const [activities, setActivities] = useState(initialActivities);
+  // Scheduled events (formerly local-only "activities") — shared Firestore
+  // collection so a created event persists and is readable by the scholar
+  // app and the QR scanner, same pattern as announcements below.
+  const [events, setEvents] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [systemSettings, setSystemSettings] = useState(parseSystemSettings);
 
@@ -536,6 +635,10 @@ export function AppProvider({ children }) {
   const addAnnouncement = async (data) => {
     const { db, isReady } = initializeFirebase();
     if (!isReady || !db) return;
+    // Tagged with the term active at posting time so the scholar app can
+    // reset its announcement list once a new semester starts, instead of
+    // showing every announcement ever posted forever.
+    const activeTerm = getActiveTerm();
     await addDoc(collection(db, 'announcements'), {
       title: data.title,
       message: data.message,
@@ -543,8 +646,13 @@ export function AppProvider({ children }) {
       isImportant: !!data.isImportant,
       attachments: data.attachments || [],
       author: 'Admin',
-      date: new Date().toISOString().split('T')[0],
+      // Full timestamp (not date-only) so the scholar app can display the
+      // actual posting time — a date-only string parses with a midnight
+      // time-of-day, which is why announcements always showed "12:00 AM".
+      date: new Date().toISOString(),
       createdAt: Date.now(),
+      schoolYear: activeTerm?.schoolYear || '',
+      semester: activeTerm?.semester || '',
     });
   };
 
@@ -568,6 +676,64 @@ export function AppProvider({ children }) {
     const { db, isReady } = initializeFirebase();
     if (!isReady || !db || !firestoreId) return;
     await deleteDoc(doc(db, 'announcements', firestoreId));
+  };
+
+  // Events — shared Firestore collection (admin schedules, scholar app and
+  // the QR scanner read the same collection).
+  useEffect(() => {
+    if (!authReady) return;
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db) return;
+    const ref = collection(db, 'events');
+    const unsubscribe = onSnapshot(ref, (snapshot) => {
+      const list = snapshot.docs
+        .map((d) => ({ firestoreId: d.id, ...d.data() }))
+        .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+      setEvents(list);
+    });
+    return () => unsubscribe();
+  }, [authReady]);
+
+  const addEvent = async (data) => {
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db) return;
+    await addDoc(collection(db, 'events'), {
+      name: data.name,
+      date: data.date,
+      // "HH:mm" strings — kept separate from `date` since that field is
+      // consumed as a date-only string/day-truncated DateTime by the scholar
+      // app and QR scanner already; combining them would break both.
+      startTime: data.startTime || '',
+      endTime: data.endTime || '',
+      required: !!data.required,
+      schoolYear: data.schoolYear || '',
+      semester: data.semester || '',
+      createdAt: Date.now(),
+    });
+  };
+
+  const updateEvent = async (firestoreId, data) => {
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db || !firestoreId) return;
+    await setDoc(
+      doc(db, 'events', firestoreId),
+      {
+        name: data.name,
+        date: data.date,
+        startTime: data.startTime || '',
+        endTime: data.endTime || '',
+        required: !!data.required,
+        schoolYear: data.schoolYear || '',
+        semester: data.semester || '',
+      },
+      { merge: true }
+    );
+  };
+
+  const deleteEvent = async (firestoreId) => {
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db || !firestoreId) return;
+    await deleteDoc(doc(db, 'events', firestoreId));
   };
 
   // Direct messages — shared `messages` collection (admin ↔ scholar, two-way)
@@ -651,20 +817,27 @@ export function AppProvider({ children }) {
   };
 
   // Publish the active academic year + semester so the scholar app can
-  // auto-assign grades/COR to the current period.
+  // auto-assign grades/COR to the current period. Mirrors whichever term is
+  // actually active in School Year Management — NOT the static System
+  // Settings defaults (defaultAcademicYear/defaultSemester never change once
+  // set, which left the scholar app frozen on the initial term forever,
+  // regardless of what admin later activated via "Set Active").
   useEffect(() => {
     if (!authReady) return;
+    const activeSy = schoolYears.find((s) => s.isActive);
+    const activeSem = activeSy?.semesters?.find((s) => s.isActive);
+    if (!activeSy || !activeSem) return;
     const { db, isReady } = initializeFirebase();
     if (!isReady || !db) return;
     setDoc(
       doc(db, 'system_config', 'academic'),
       {
-        activeSchoolYear: systemSettings.defaultAcademicYear,
-        activeSemester: systemSettings.defaultSemester,
+        activeSchoolYear: activeSy.label,
+        activeSemester: activeSem.name,
       },
       { merge: true }
     ).catch(() => {});
-  }, [authReady, systemSettings.defaultAcademicYear, systemSettings.defaultSemester]);
+  }, [authReady, schoolYears]);
 
   // Sends a message from the admin to a student (the scholar app reads it).
   const sendDirectMessage = async (toUserId, body, subject = 'Message from CED', attachments = []) => {
@@ -717,7 +890,8 @@ export function AppProvider({ children }) {
             // docs so History works without a separate collection/rules deploy.
             if (d.archived === true) {
               const record = normalizeApplicantFinancialFields(
-                mapStudentToApplicant({ ...d, id: docSnap.id })
+                mapStudentToApplicant({ ...d, id: docSnap.id }),
+                catalogProgramsRef.current
               );
               if (d.archiveType === 'scholar') {
                 archivedScholars.push({
@@ -741,7 +915,7 @@ export function AppProvider({ children }) {
             // Pass the doc id so firestoreId is always set, even for docs whose
             // data has no `id` field (admin-created) — otherwise admin writes
             // (status, semester enrollment, …) would silently no-op.
-            fromFirestore.push(normalizeApplicantFinancialFields(mapStudentToApplicant({ ...d, id: docSnap.id })));
+            fromFirestore.push(normalizeApplicantFinancialFields(mapStudentToApplicant({ ...d, id: docSnap.id }), catalogProgramsRef.current));
           } catch (err) {
             console.error('Skipping malformed user doc', docSnap.id, err);
           }
@@ -806,14 +980,14 @@ export function AppProvider({ children }) {
     const needsMigration = applicants.some(a => !a.schoolYear);
     const needsFinancialSync = applicants.some((a) => {
       const normalizedTuition = Math.max(0, toNumber(a?.tuitionFee));
-      return toNumber(a?.amountGranted) !== computeReflectedAmount(normalizedTuition);
+      return toNumber(a?.amountGranted) !== computeReflectedAmount(normalizedTuition, a?.school, a?.program, catalogProgramsRef.current);
     });
 
     if (needsMigration || needsFinancialSync) {
       const migratedApplicants = applicants.map(applicant => {
         const wasBlank = !applicant.schoolYear;
         const migrated = {
-          ...normalizeApplicantFinancialFields(applicant),
+          ...normalizeApplicantFinancialFields(applicant, catalogProgramsRef.current),
           schoolYear: applicant.schoolYear || activeYearLabel,
         };
         // Persist a newly-assigned school year so it sticks and the scholar app
@@ -880,6 +1054,26 @@ export function AppProvider({ children }) {
     );
   }, [systemSettings]);
 
+  // Firestore-backed system config — keeps numberOfSemesters (and any other
+  // persisted settings) in sync across browsers and dev-server restarts.
+  useEffect(() => {
+    if (!authReady) return;
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db) return;
+    const unsubscribe = onSnapshot(
+      doc(db, 'system_config', 'settings'),
+      (docSnap) => {
+        if (!docSnap.exists()) return;
+        const data = docSnap.data();
+        if (data.numberOfSemesters != null) {
+          setSystemSettings(prev => ({ ...prev, numberOfSemesters: data.numberOfSemesters }));
+        }
+      },
+      () => { /* ignore permission errors on undeployed rules */ }
+    );
+    return () => unsubscribe();
+  }, [authReady]);
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
@@ -889,6 +1083,17 @@ export function AppProvider({ children }) {
       ...prev,
       ...updates,
     }));
+    // Persist numberOfSemesters to Firestore so it survives browser/server restarts.
+    if ('numberOfSemesters' in updates) {
+      const { db, isReady } = initializeFirebase();
+      if (isReady && db) {
+        setDoc(
+          doc(db, 'system_config', 'settings'),
+          { numberOfSemesters: updates.numberOfSemesters },
+          { merge: true }
+        ).catch(() => {});
+      }
+    }
   };
 
   const resetSystemSettings = () => {
@@ -937,7 +1142,7 @@ export function AppProvider({ children }) {
       attendance: [],
       grades: [],
       yearAwarded: applicant.yearAwarded || new Date().getFullYear(),
-    });
+    }, catalogProgramsRef.current);
 
     if (userRef) {
       setDoc(
@@ -1013,12 +1218,48 @@ export function AppProvider({ children }) {
         return;
       }
 
-      const updated = normalizeApplicantFinancialFields({ ...a, ...updates });
+      let updated = normalizeApplicantFinancialFields({ ...a, ...updates }, catalogProgramsRef.current);
+
+      // Auto-evaluate when grades or attendance are explicitly updated.
+      // Only applies to active/approved scholars — never overrides a manual
+      // status change made in the same update.
+      const evalOnGradesOrAttendance =
+        ('grades' in updates || 'attendance' in updates) &&
+        !('status' in updates) &&
+        (updated.status === 'active' || updated.status === 'approved');
+
+      if (evalOnGradesOrAttendance) {
+        const activeTerm = getActiveTerm();
+        // Excessive absences → auto-terminate. Only events scheduled for the
+        // currently active term count — an absence from a semester that has
+        // already ended shouldn't keep counting once a new term has started.
+        if (!updated.isStAugustine) {
+          const termEvents = activeTerm
+            ? events.filter((e) => e.schoolYear === activeTerm.schoolYear && e.semester === activeTerm.semester)
+            : [];
+          const absences = termEvents.filter((event) => {
+            if (!hasEventEnded(event)) return false;
+            const rec = (updated.attendance || []).find((a) => a.activity === event.name);
+            return !rec || !rec.present;
+          }).length;
+          if (absences > 2) {
+            updated = {
+              ...updated,
+              status: 'terminated',
+              terminationReason: `Exceeded absence limit (${absences} absences)`,
+            };
+          }
+        }
+        // Failing / INC subject → auto on-hold (only if not already terminated)
+        if (updated.status !== 'terminated' && hasFailingOrIncGrades(updated.grades, activeTerm)) {
+          updated = { ...updated, status: 'on-hold' };
+        }
+      }
+
       edited = updated;
 
-      // Auto-archive on a transition into an archive status (rejected →
-      // Applicant History; graduated/terminated → Scholar History). The record
-      // is dropped from the active list instead of staying behind.
+      // Only rejected applicants are immediately archived. Graduated/terminated
+      // scholars stay visible until the semester ends.
       const becameArchived =
         ARCHIVE_STATUSES.includes(updated.status) && !ARCHIVE_STATUSES.includes(a.status);
 
@@ -1060,77 +1301,528 @@ export function AppProvider({ children }) {
     writeRecordToHistory({ ...target, status: 'rejected' }, { reason });
   };
 
-  // Advances the active term: enrolls every active scholar into (schoolYear,
-  // semester). Adds the term to the scholar's record (idempotently, so toggling
-  // the active term back and forth never double-counts), bumps Semesters Used
-  // (capped at 8), and persists to Firestore so Semester Records and Total
-  // Granted update. Returns how many scholars were enrolled.
-  const enrollActiveScholarsInSemester = (schoolYear, semester) => {
-    if (!schoolYear || !semester) return { enrolled: 0 };
-    let count = 0;
-    const updated = applicantsRef.current.map((a) => {
-      const isActiveScholar = a.status === 'approved' || a.status === 'active';
-      if (!isActiveScholar) return a;
-
-      const existing = Array.isArray(a.enrolledSemesters) ? a.enrolledSemesters : [];
-      const already = existing.some((e) => e.schoolYear === schoolYear && e.semester === semester);
-      if (already || existing.length >= 8) return a;
-
-      // The grant released for this term (program cap when not set explicitly).
-      const perSemGrant = resolvePerSemGrant(a, catalogProgramsRef.current);
-      const nextSemesters = [
-        ...existing,
-        { schoolYear, semester, grantedAmount: perSemGrant, status: 'disbursed', enrolledAt: todayISO() },
-      ];
-      const next = {
-        ...a,
-        enrolledSemesters: nextSemesters,
-        semestersUsed: Math.min(8, (a.semestersUsed || 0) + 1),
-        // Persist the resolved per-sem grant so the scholar app can total it.
-        amountGranted: perSemGrant,
-      };
-      count += 1;
-      syncApplicantToFirestore(next);
-      return next;
-    });
-
-    if (count > 0) {
-      setApplicants(updated);
-      logAudit({
-        action: 'UPDATE',
-        collection: 'users',
-        documentId: 'multiple',
-        details: `Enrolled ${count} active scholar(s) into ${semester} (${schoolYear})`,
-      });
-    }
-    // Scholars who now reach 8 completed semesters are graduated by the
-    // auto-graduation effect below (single source of truth for graduation).
-    return { enrolled: count };
+  // Reconstructs the historical range for a legacy scholar (predates
+  // countedTerms, only has the old single-value legacyLastCountedTerm):
+  // every currently-configured term between when they started
+  // (schoolYear/semester) and the last term they were counted for under the
+  // old scheme, inclusive. Shared by enrollActiveScholarsInSemester's bump
+  // (below) and the one-time countedTerms repair effect (further below).
+  const reconstructLegacyTerms = (a) => {
+    const startKey = termSortKey(a.schoolYear, a.semester || '1st Semester');
+    const endKey = a.legacyLastCountedTerm
+      ? termSortKey(...a.legacyLastCountedTerm.split('::'))
+      : startKey;
+    return schoolYearsRef.current
+      .flatMap((sy) => (sy.semesters || []).map((sem) => ({
+        key: `${sy.label}::${sem.name}`,
+        sortKey: termSortKey(sy.label, sem.name),
+      })))
+      .filter((t) => t.sortKey >= startKey && t.sortKey <= endKey)
+      .map((t) => t.key);
   };
 
-  // Auto-graduation: the scholarship covers a maximum of 8 semesters (4 years).
-  // Any active scholar who has completed all 8 is moved to Scholar History as
-  // Graduated — no matter how they reached 8 (term enrollment, a manual edit,
-  // or imported/seeded data). A processed-id guard avoids archiving the same
-  // scholar twice while the Firestore listener catches up.
+  // Advances the active term: every active/approved/on-hold scholar's
+  // Semesters Used ticks up simply because a new term has started — this is
+  // a program-timeline counter, not a reward for individual verification, so
+  // it advances the same way for an on-hold scholar, a scholar marked "Not
+  // Enrolled", or one just restored from Scholar History. It also resets
+  // enrollmentStatus for a fresh check ("Verified" was for the term that
+  // just ended) — but that reset is now purely about the enrollment
+  // badge/financial grant (see grantSemesterIfNeeded), a separate concern
+  // from the count. `countedTerms` (the SET of every term ever counted, not
+  // just the most recent one) keeps this idempotent per-term — re-activating
+  // an already-counted term (e.g. toggling back to a previous term) is
+  // correctly a no-op instead of counting it again.
+  const enrollActiveScholarsInSemester = (schoolYear, semester) => {
+    if (!schoolYear || !semester) return { enrolled: 0 };
+    const termKey = `${schoolYear}::${semester}`;
+    const semLimit = systemSettings.numberOfSemesters || 8;
+
+    const needsCounting = (a) => {
+      const isActiveScholar = a.status === 'approved' || a.status === 'active' || a.status === 'on-hold';
+      return isActiveScholar && !(a.countedTerms || []).includes(termKey);
+    };
+
+    const bump = (a) => {
+      let baseCountedTerms = Array.isArray(a.countedTerms) ? a.countedTerms : [];
+      // Union in the reconstructed historical range for scholars with a
+      // legacy legacyLastCountedTerm marker — a Set union is safe/idempotent
+      // regardless of whatever's already in countedTerms, and self-heals if
+      // it was ever incompletely populated (e.g. a scholar whose countedTerms
+      // only ever picked up the term active at the moment they were first
+      // touched under this scheme, before this reconstruction existed).
+      if (a.legacyLastCountedTerm || (a.semestersUsed || 0) > 0) {
+        baseCountedTerms = Array.from(new Set([...baseCountedTerms, ...reconstructLegacyTerms(a)]));
+      }
+
+      const nextCountedTerms = baseCountedTerms.includes(termKey)
+        ? baseCountedTerms
+        : [...baseCountedTerms, termKey];
+      const newSemestersUsed = Math.min(semLimit, nextCountedTerms.length);
+      return {
+        ...a,
+        semestersUsed: newSemestersUsed,
+        yearLevel: Math.ceil(newSemestersUsed / 2),
+        countedTerms: nextCountedTerms,
+        // A new term means a fresh enrollment check — the admin's previous
+        // "Verified" confirmation was for the term that just ended.
+        enrollmentStatus: null,
+        enrollmentNotEnrolledReason: null,
+      };
+    };
+
+    // Computed synchronously from applicantsRef.current — NOT by mutating an
+    // outer `count`/`toSync` from inside the setApplicants updater below.
+    // React doesn't guarantee that a functional updater runs synchronously at
+    // the call site, so mutating outer variables there and reading them right
+    // after (the previous approach) silently read stale initial values: the
+    // in-memory bump still applied correctly (which is why the admin's own
+    // session always rendered the right number), but syncApplicantToFirestore
+    // never actually fired, so Firestore itself never advanced.
+    const toSync = applicantsRef.current.filter(needsCounting).map(bump);
+    if (toSync.length === 0) return { enrolled: 0 };
+
+    // Functional update, re-checking each condition against the LIVE `prev`
+    // entry (not the snapshot used above) — this can run in the same batch as
+    // other functional updates (e.g. the repair migration below), and a
+    // non-functional `setApplicants(value)` here would silently clobber
+    // whichever of the two runs first instead of composing with it.
+    setApplicants((prev) => prev.map((a) => (needsCounting(a) ? bump(a) : a)));
+
+    toSync.forEach((a) => syncApplicantToFirestore(a));
+    logAudit({
+      action: 'UPDATE',
+      collection: 'users',
+      documentId: 'multiple',
+      details: `Advanced ${toSync.length} scholar(s) into ${semester} (${schoolYear})`,
+    });
+    return { enrolled: toSync.length };
+  };
+
+  // One-time repair: reconstructs countedTerms for scholars whose count was
+  // already touched under this scheme before reconstruction was inlined into
+  // enrollActiveScholarsInSemester's bump — their countedTerms only ever
+  // picked up whatever term was active at that moment (e.g. from admin
+  // toggling "Set Active" back and forth between two terms while testing,
+  // which used to increment Semesters Used every single time). Same union
+  // logic as bump, so it's safe to run repeatedly and self-limiting: once
+  // fully reconstructed, the union is a no-op.
+  useEffect(() => {
+    const keyOf = (a) => a.firestoreId || a.scholarId || String(a.id);
+    const semLimit = systemSettings.numberOfSemesters || 8;
+    const toFix = applicants.filter((a) => {
+      if (!a.legacyLastCountedTerm && !(a.semestersUsed > 0)) return false;
+      const reconstructed = reconstructLegacyTerms(a);
+      const current = new Set(a.countedTerms || []);
+      return reconstructed.some((t) => !current.has(t));
+    });
+    if (toFix.length === 0) return;
+
+    const fixKeys = new Set(toFix.map(keyOf));
+    setApplicants((prev) =>
+      prev.map((a) => {
+        if (!fixKeys.has(keyOf(a))) return a;
+        const merged = Array.from(new Set([...(a.countedTerms || []), ...reconstructLegacyTerms(a)]));
+        if (merged.length === (a.countedTerms || []).length) return a;
+        const newSemestersUsed = Math.min(semLimit, merged.length);
+        const next = {
+          ...a,
+          countedTerms: merged,
+          semestersUsed: newSemestersUsed,
+          yearLevel: Math.max(1, Math.ceil(newSemestersUsed / 2)),
+        };
+        syncApplicantToFirestore(next);
+        return next;
+      })
+    );
+  }, [applicants, schoolYears, systemSettings.numberOfSemesters]);
+
+  // Safety net: guarantees the currently active term's scholars get counted
+  // even if the active term changed through a path other than "Add
+  // Term"/"Set Active" (e.g. the very first school year ever added becomes
+  // active automatically, with no explicit "Set Active" click to hang this
+  // off of). Idempotent via countedTerms, so this only ever acts once per
+  // scholar per term regardless of how many times it fires.
+  useEffect(() => {
+    const activeSy = schoolYears.find((s) => s.isActive);
+    const activeSem = activeSy?.semesters?.find((s) => s.isActive);
+    if (!activeSy || !activeSem) return;
+    enrollActiveScholarsInSemester(activeSy.label, activeSem.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applicants, schoolYears]);
+
+  // Grants a specific (schoolYear, semester) to a scholar if it isn't already
+  // recorded — the one place enrolledSemesters/the scholarship grant gets a
+  // new entry. This is purely financial and does NOT touch Semesters Used —
+  // that count advances on its own whenever a term starts (see
+  // enrollActiveScholarsInSemester), independent of verification. Shared by
+  // verifyScholarEnrollment ("Evaluate Enrollment" → Enrolled) and
+  // confirming a scholar's grades in Academic Records — either is solid
+  // evidence the semester actually happened, so either can grant the money.
+  // Returns the applicant unchanged if already granted or at the semester cap.
+  const grantSemesterIfNeeded = (applicant, schoolYear, semester) => {
+    if (!schoolYear || !semester) return applicant;
+    const existing = Array.isArray(applicant.enrolledSemesters) ? applicant.enrolledSemesters : [];
+    const semLimit = systemSettings.numberOfSemesters || 8;
+    const alreadyGranted = existing.some((e) => e.schoolYear === schoolYear && e.semester === semester);
+    if (alreadyGranted || existing.length >= semLimit) return applicant;
+
+    const isOnHold = applicant.status === 'on-hold';
+    const perSemGrant = isOnHold ? 0 : resolvePerSemGrant(applicant, catalogProgramsRef.current);
+    return {
+      ...applicant,
+      enrolledSemesters: [
+        ...existing,
+        {
+          schoolYear,
+          semester,
+          grantedAmount: perSemGrant,
+          status: isOnHold ? 'on_hold' : 'disbursed',
+          enrolledAt: todayISO(),
+        },
+      ],
+      ...(!isOnHold && { amountGranted: perSemGrant }),
+    };
+  };
+
+  // Grants a scholar their currently-active term once an admin confirms
+  // enrollment via "Evaluate Enrollment".
+  const verifyScholarEnrollment = (id, status, reason = '') => {
+    const target = applicantsRef.current.find((a) => a.id === id);
+    if (!target) return;
+
+    let next = {
+      ...target,
+      enrollmentStatus: status,
+      enrollmentNotEnrolledReason: status === 'Not Enrolled' ? (reason || '') : null,
+    };
+
+    if (status === 'Verified') {
+      const activeSy = schoolYearsRef.current.find((s) => s.isActive);
+      const activeSem = activeSy?.semesters?.find((s) => s.isActive);
+      if (activeSy && activeSem) {
+        next = grantSemesterIfNeeded(next, activeSy.label, activeSem.name);
+      }
+    }
+
+    setApplicants((prev) => prev.map((a) => (a.id === id ? next : a)));
+    syncApplicantToFirestore(next);
+    logAudit({
+      action: 'UPDATE',
+      collection: 'users',
+      documentId: next.firestoreId || next.scholarId || String(next.id),
+      details: `Set enrollment status to ${status} for ${next.name || 'scholar'}`,
+    });
+    return next;
+  };
+
+  // Persists a scholar's per-semester grade confirmation/revision map and,
+  // when a period is being newly confirmed, also grants that semester (see
+  // grantSemesterIfNeeded) in the SAME state update — a scholar's grades
+  // being confirmed is solid evidence the semester happened, so this
+  // shouldn't need a separate "Evaluate Enrollment" click to count toward
+  // Semesters Used / Financial Information. Doing both in one functional
+  // update (rather than a separate grant call alongside updateApplicant)
+  // avoids one write clobbering the other.
+  const setGradesEvaluation = (id, gradesEvaluation, grantIfConfirmed) => {
+    let result = null;
+    setApplicants((prev) =>
+      prev.map((a) => {
+        if (a.id !== id) return a;
+        let next = { ...a, gradesEvaluation };
+        if (grantIfConfirmed) {
+          next = grantSemesterIfNeeded(next, grantIfConfirmed.schoolYear, grantIfConfirmed.semester);
+        }
+        result = next;
+        return next;
+      })
+    );
+    if (!result) return;
+    syncApplicantToFirestore(result);
+    logAudit({
+      action: 'UPDATE',
+      collection: 'users',
+      documentId: result.firestoreId || result.scholarId || String(result.id),
+      details: `Updated grade evaluation for ${result.name || 'scholar'}`,
+    });
+  };
+
+  // Cleanup: verifyScholarEnrollment always sets "Verified" together with the
+  // matching enrolledSemesters entry for the current term, so the two should
+  // never be out of sync — but a scholar restored from history before the
+  // restore reset existed (or any other stale-data edge case) can end up
+  // "Verified" with no grant to back it up, leaving them stuck showing
+  // "ENROLLED" without ever having been checked for the term that's actually
+  // running. Clear the stale flag so they correctly show "FOR VERIFICATION".
+  useEffect(() => {
+    const activeSy = schoolYears.find((s) => s.isActive);
+    const activeSem = activeSy?.semesters?.find((s) => s.isActive);
+    if (!activeSy || !activeSem) return;
+
+    const keyOf = (a) => a.firestoreId || a.scholarId || String(a.id);
+    const toFix = applicants.filter((a) => {
+      if (a.enrollmentStatus !== 'Verified') return false;
+      const enrolled = Array.isArray(a.enrolledSemesters) ? a.enrolledSemesters : [];
+      return !enrolled.some((e) => e.schoolYear === activeSy.label && e.semester === activeSem.name);
+    });
+    if (toFix.length === 0) return;
+
+    const fixKeys = new Set(toFix.map(keyOf));
+    setApplicants((prev) =>
+      prev.map((a) => {
+        if (!fixKeys.has(keyOf(a))) return a;
+        const next = { ...a, enrollmentStatus: null, enrollmentNotEnrolledReason: null };
+        syncApplicantToFirestore(next);
+        return next;
+      })
+    );
+  }, [applicants, schoolYears]);
+
+  // One-time reconciliation: a scholar's grades could be confirmed in
+  // Academic Records without an admin ever separately clicking "Evaluate
+  // Enrollment" for that period — before setGradesEvaluation granted on
+  // confirm, that gap left Semesters Used / Financial Information
+  // permanently understated for an otherwise fully-evaluated semester. Grant
+  // any confirmed period that's still missing its enrolledSemesters entry.
+  useEffect(() => {
+    const toGrant = new Map();
+    applicants.forEach((a) => {
+      const evalMap = a.gradesEvaluation || {};
+      const enrolled = Array.isArray(a.enrolledSemesters) ? a.enrolledSemesters : [];
+      Object.entries(evalMap).forEach(([key, ev]) => {
+        if (ev?.status !== 'confirmed') return;
+        const [schoolYear, semester] = key.split('::');
+        if (!schoolYear || !semester) return;
+        if (enrolled.some((e) => e.schoolYear === schoolYear && e.semester === semester)) return;
+        if (!toGrant.has(a.id)) toGrant.set(a.id, []);
+        toGrant.get(a.id).push({ schoolYear, semester });
+      });
+    });
+    if (toGrant.size === 0) return;
+
+    setApplicants((prev) =>
+      prev.map((a) => {
+        const grants = toGrant.get(a.id);
+        if (!grants) return a;
+        // Grant in chronological order so Semesters Used advances sensibly
+        // for a scholar with more than one confirmed-but-ungranted gap.
+        let next = grants
+          .sort((x, y) => x.schoolYear.localeCompare(y.schoolYear) || x.semester.localeCompare(y.semester))
+          .reduce((acc, g) => grantSemesterIfNeeded(acc, g.schoolYear, g.semester), a);
+        if (next !== a) syncApplicantToFirestore(next);
+        return next;
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applicants]);
+
+  // One-time data fix for scholars already affected by the pre-verification-
+  // gating bug (granted a term automatically the moment it started, before
+  // enrolledSemesters required a confirmed enrollment): their earliest
+  // enrolledSemesters entry is mislabeled "2nd Semester" because that was the
+  // next term added after them, with the true 1st Semester of that same
+  // school year never recorded. Backfill the missing entry whenever that 1st
+  // Semester term was actually configured.
+  useEffect(() => {
+    const keyOf = (a) => a.firestoreId || a.scholarId || String(a.id);
+    const earliestOf = (enrolled) =>
+      [...enrolled].sort((x, y) => String(x.enrolledAt || '').localeCompare(String(y.enrolledAt || '')))[0];
+
+    const toFix = applicants.filter((a) => {
+      const enrolled = Array.isArray(a.enrolledSemesters) ? a.enrolledSemesters : [];
+      if (enrolled.length === 0) return false;
+      const earliest = earliestOf(enrolled);
+      if (earliest.semester !== '2nd Semester') return false;
+      const alreadyHasFirst = enrolled.some(
+        (e) => e.schoolYear === earliest.schoolYear && e.semester === '1st Semester'
+      );
+      if (alreadyHasFirst) return false;
+      const sy = schoolYears.find((s) => s.label === earliest.schoolYear);
+      return (sy?.semesters || []).some((s) => s.name === '1st Semester');
+    });
+    if (toFix.length === 0) return;
+
+    const fixKeys = new Set(toFix.map(keyOf));
+    setApplicants((prev) =>
+      prev.map((a) => {
+        if (!fixKeys.has(keyOf(a))) return a;
+        const enrolled = a.enrolledSemesters || [];
+        // Guard against the cleanup-revert effect (above) having already
+        // stripped this scholar's only entry in the same batch.
+        if (enrolled.length === 0) return a;
+        const earliest = earliestOf(enrolled);
+        const perSemGrant = resolvePerSemGrant(a, catalogProgramsRef.current);
+        const backfilled = {
+          schoolYear: earliest.schoolYear,
+          semester: '1st Semester',
+          grantedAmount: earliest.status === 'on_hold' ? 0 : perSemGrant,
+          status: earliest.status || 'disbursed',
+          enrolledAt: earliest.enrolledAt || todayISO(),
+        };
+        // Financial backfill only — Semesters Used is a separate, term-based
+        // counter (see enrollActiveScholarsInSemester) and isn't touched here.
+        const next = { ...a, enrolledSemesters: [backfilled, ...enrolled] };
+        syncApplicantToFirestore(next);
+        return next;
+      })
+    );
+  }, [applicants, schoolYears]);
+
+  // Auto-graduation: marks scholars as 'graduated' when they reach the semester
+  // limit, but keeps them in the active list. They move to Scholar History when
+  // the admin ends the semester via endOfSemesterScholarsCleanup.
   const graduatedSweepRef = useRef(new Set());
   useEffect(() => {
     const keyOf = (a) => a.firestoreId || a.scholarId || String(a.id);
-    const completed = applicants.filter(
+    const maxSemesters = systemSettings.numberOfSemesters || 8;
+    const toGraduate = applicants.filter(
       (a) =>
         (a.status === 'active' || a.status === 'approved') &&
-        (a.semestersUsed || 0) >= 8 &&
+        (a.semestersUsed || 0) >= maxSemesters &&
         a.gradExempt !== true &&
         !graduatedSweepRef.current.has(keyOf(a))
     );
-    if (completed.length === 0) return;
-    completed.forEach((a) => graduatedSweepRef.current.add(keyOf(a)));
-    const completedKeys = new Set(completed.map(keyOf));
-    setApplicants((prev) => prev.filter((a) => !completedKeys.has(keyOf(a))));
-    completed.forEach((a) => writeRecordToHistory({ ...a, status: 'graduated' }));
+    if (toGraduate.length === 0) return;
+    toGraduate.forEach((a) => graduatedSweepRef.current.add(keyOf(a)));
+    setApplicants((prev) =>
+      prev.map((a) => {
+        if (!toGraduate.some((g) => keyOf(g) === keyOf(a))) return a;
+        const graduated = { ...a, status: 'graduated' };
+        syncApplicantToFirestore(graduated);
+        return graduated;
+      })
+    );
   }, [applicants]);
 
-  // Manually archive a scholar to Scholar History (Graduated / Terminated).
+  // Auto on-hold sweep: any active/approved scholar whose CURRENT term's grade
+  // entries contain a non-Passed remark is placed on hold and their grant is
+  // cleared to 0. Scoped to the active term only — a failing grade from an
+  // already-closed semester shouldn't keep re-triggering hold in a new one.
+  // This effect catches grades submitted directly from the Flutter scholar app
+  // (which write to Firestore and bypass the admin's updateApplicant) as well
+  // as grades added via the admin Academic Records form.
+  useEffect(() => {
+    const activeTerm = getActiveTerm();
+    const keyOf = (a) => a.firestoreId || a.scholarId || String(a.id);
+    const toHold = applicants.filter(
+      (a) =>
+        (a.status === 'active' || a.status === 'approved') &&
+        hasFailingOrIncGrades(a.grades, activeTerm)
+    );
+    if (toHold.length === 0) return;
+
+    const holdKeys = new Set(toHold.map(keyOf));
+    setApplicants((prev) =>
+      prev.map((a) => {
+        if (!holdKeys.has(keyOf(a))) return a;
+        // Clear the grant so the scholar app shows ₱0 while on hold.
+        const onHold = { ...a, status: 'on-hold', amountGranted: 0 };
+        syncApplicantToFirestore(onHold);
+        return onHold;
+      })
+    );
+  }, [applicants, schoolYears]);
+
+  // Auto-reactivation sweep: an on-hold scholar who has at least one grade on
+  // record for the CURRENT term and all of that term's grades are now passing
+  // is automatically restored to active with their per-semester grant
+  // reinstated. Scoped to the active term so a stale failing grade from an
+  // already-closed semester can't keep blocking reactivation. This mirrors the
+  // on-hold sweep so that grade corrections (or new grades submitted from the
+  // Flutter app) immediately lift the hold without waiting for an admin action.
+  useEffect(() => {
+    const activeTerm = getActiveTerm();
+    const keyOf = (a) => a.firestoreId || a.scholarId || String(a.id);
+    const toReactivate = applicants.filter((a) => {
+      if (a.status !== 'on-hold') return false;
+      const termGrades = activeTerm
+        ? (a.grades || []).filter((g) => g.schoolYear === activeTerm.schoolYear && g.semester === activeTerm.semester)
+        : [];
+      return termGrades.length > 0 && !hasFailingOrIncGrades(termGrades);
+    });
+    if (toReactivate.length === 0) return;
+
+    const reactivateKeys = new Set(toReactivate.map(keyOf));
+    setApplicants((prev) =>
+      prev.map((a) => {
+        if (!reactivateKeys.has(keyOf(a))) return a;
+        const restoredGrant = resolvePerSemGrant(a, catalogProgramsRef.current);
+        const active = { ...a, status: 'active', amountGranted: restoredGrant };
+        syncApplicantToFirestore(active);
+        return active;
+      })
+    );
+  }, [applicants, schoolYears]);
+
+  // Ticks periodically so the auto-absence sweep below re-evaluates against
+  // the current time even if nothing else changes (e.g. an admin leaves the
+  // Attendance page open past an event's end time with no new scan coming in).
+  const [absenceCheckTick, setAbsenceCheckTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setAbsenceCheckTick((t) => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Auto-absence sweep: once a scheduled event's end time has passed, any
+  // active/approved scholar (not exempt) with no attendance record for it is
+  // recorded absent — they didn't scan in time. Mirrors handleMarkAttendance's
+  // manual "mark absent" in Attendance.jsx, but runs automatically as events
+  // end rather than requiring the admin to mark each scholar, and auto-
+  // terminates past the absence limit the same way.
+  useEffect(() => {
+    const activeSy = schoolYears.find((s) => s.isActive);
+    const activeSem = activeSy?.semesters?.find((s) => s.isActive);
+    if (!activeSy || !activeSem) return;
+
+    const termEvents = events.filter(
+      (e) => e.schoolYear === activeSy.label && e.semester === activeSem.name && hasEventEnded(e)
+    );
+    if (termEvents.length === 0) return;
+
+    const keyOf = (a) => a.firestoreId || a.scholarId || String(a.id);
+    const missingByScholar = new Map();
+    applicants.forEach((a) => {
+      if (a.status !== 'active' && a.status !== 'approved') return;
+      if (a.isStAugustine) return;
+      const attendance = Array.isArray(a.attendance) ? a.attendance : [];
+      const missing = termEvents.filter((e) => !attendance.some((r) => r.activity === e.name));
+      if (missing.length > 0) missingByScholar.set(keyOf(a), missing);
+    });
+    if (missingByScholar.size === 0) return;
+
+    setApplicants((prev) =>
+      prev.map((a) => {
+        const missing = missingByScholar.get(keyOf(a));
+        if (!missing) return a;
+        const newRecords = missing.map((e) => ({
+          activity: e.name,
+          date: e.date,
+          present: false,
+          timeLogged: todayISO(),
+          loggedVia: 'Auto (no scan by end time)',
+        }));
+        const nextAttendance = [...(a.attendance || []), ...newRecords];
+
+        const totalAbsences = termEvents.filter((e) => {
+          const rec = nextAttendance.find((r) => r.activity === e.name);
+          return !rec || !rec.present;
+        }).length;
+
+        const next = {
+          ...a,
+          attendance: nextAttendance,
+          ...(totalAbsences > 2 && {
+            status: 'terminated',
+            terminationReason: `Exceeded absence limit (${totalAbsences} absences)`,
+          }),
+        };
+        syncApplicantToFirestore(next);
+        return next;
+      })
+    );
+  }, [applicants, events, schoolYears, absenceCheckTick]);
+
+  // Manually archive a scholar to Scholar History immediately (admin override).
   const archiveScholar = (id, status = 'graduated') => {
     const target = applicants.find((a) => a.id === id);
     if (!target) return;
@@ -1139,18 +1831,94 @@ export function AppProvider({ children }) {
     writeRecordToHistory({ ...target, status: nextStatus });
   };
 
+  // End-of-semester cleanup: runs when the admin switches the active term.
+  // 1. Archives graduated/terminated scholars to Scholar History.
+  // 2. Reactivates on-hold scholars who have cleared all failing grades —
+  //    on-hold lasts for the semester it was applied; the new term is a fresh start.
+  // 3. Resets every remaining scholar's enrollment verification — it was a
+  //    confirmation for the term that just ended, not the one starting now.
+  const endOfSemesterScholarsCleanup = () => {
+    // Read before the caller flips the active term, so this reflects the
+    // term that's ending, not the one about to start.
+    const outgoingTerm = getActiveTerm();
+    const allApplicants = applicantsRef.current;
+    const keyOf = (a) => a.firestoreId || a.scholarId || String(a.id);
+
+    const toArchive = allApplicants.filter(
+      (a) => a.status === 'terminated' || a.status === 'graduated'
+    );
+    toArchive.forEach((a) => writeRecordToHistory(a));
+
+    // On-hold scholars with no remaining failing grades in the outgoing term
+    // get a clean slate — a failing grade from an even earlier, already-closed
+    // semester shouldn't keep blocking reactivation.
+    const toReactivate = allApplicants.filter(
+      (a) => a.status === 'on-hold' && !hasFailingOrIncGrades(a.grades, outgoingTerm)
+    );
+    const reactivateKeys = new Set(toReactivate.map(keyOf));
+
+    setApplicants((prev) =>
+      prev
+        .filter((a) => a.status !== 'terminated' && a.status !== 'graduated')
+        .map((a) => {
+          const needsReactivate = reactivateKeys.has(keyOf(a));
+          const needsEnrollmentReset = !!a.enrollmentStatus;
+          if (!needsReactivate && !needsEnrollmentReset) return a;
+
+          const next = {
+            ...a,
+            ...(needsReactivate && {
+              status: 'active',
+              amountGranted: resolvePerSemGrant(a, catalogProgramsRef.current),
+            }),
+            enrollmentStatus: null,
+            enrollmentNotEnrolledReason: null,
+          };
+          syncApplicantToFirestore(next);
+          return next;
+        })
+    );
+
+    if (toArchive.length > 0) {
+      logAudit({
+        action: 'ARCHIVE',
+        collection: 'scholar_history',
+        documentId: 'multiple',
+        details: `End-of-semester cleanup: archived ${toArchive.length} graduated/terminated scholar(s) to Scholar History`,
+      });
+    }
+
+    return { archived: toArchive.length, reactivated: toReactivate.length };
+  };
+
   // Restore an applicant from Applicant History back into the active list.
   const restoreFromHistory = async (historyEntry) => {
     if (!historyEntry) return;
     const { db, isReady } = initializeFirebase();
     if (!isReady || !db) return;
 
-    // Reactivate the source user doc (clear the archived flag, reset to pending).
+    // Reactivate the source user doc (clear the archived flag).
+    // If the snapshot shows a scholarId, this was a scholar incorrectly archived
+    // (e.g. by the old carryOver bug) — restore as active scholar so the auto
+    // on-hold sweep immediately re-applies on-hold if they have failing grades.
     if (historyEntry.applicantId) {
       try {
+        const snapshot = historyEntry.snapshot || {};
+        const wasScholar = !!(snapshot.scholarId);
         await setDoc(
           doc(db, 'users', historyEntry.applicantId),
-          { archived: false, archivedDate: null, applicationStatus: 'pending', adminStatus: 'pending' },
+          wasScholar
+            ? {
+                archived: false,
+                archivedDate: null,
+                archiveType: null,
+                archiveReason: null,
+                adminStatus: 'active',
+                applicationStatus: 'approved',
+                studentType: 'scholar',
+                scholarshipStatus: 'Active',
+              }
+            : { archived: false, archivedDate: null, applicationStatus: 'pending', adminStatus: 'pending' },
           { merge: true }
         );
       } catch (_) { /* keep UI responsive */ }
@@ -1193,6 +1961,12 @@ export function AppProvider({ children }) {
             studentType: 'scholar',
             scholarshipStatus: 'Active',
             gradExempt: true,
+            // A restored scholar hasn't been confirmed enrolled in whatever
+            // term is active now — without this they'd show as already
+            // "Enrolled" from the term they were terminated in, skipping
+            // verification entirely (see verifyScholarEnrollment).
+            enrollmentStatus: null,
+            enrollmentNotEnrolledReason: null,
           },
           { merge: true }
         );
@@ -1251,7 +2025,7 @@ export function AppProvider({ children }) {
         ranking: null,
         attendance: [],
         grades: [],
-      })
+      }, catalogProgramsRef.current)
     );
     setApplicants([...applicants, ...importedApplicants]);
   };
@@ -1640,23 +2414,6 @@ export function AppProvider({ children }) {
     await updateDoc(doc(db, 'school_years', yearId), { semesters });
   };
 
-  // Activity CRUD
-  const addActivity = (activity) => {
-    const newActivity = {
-      ...activity,
-      id: Math.max(0, ...activities.map(a => a.id)) + 1,
-    };
-    setActivities([...activities, newActivity]);
-  };
-
-  const updateActivity = (id, updates) => {
-    setActivities(activities.map(a => a.id === id ? { ...a, ...updates } : a));
-  };
-
-  const deleteActivity = (id) => {
-    setActivities(activities.filter(a => a.id !== id));
-  };
-
   // Stats calculation
   const getStats = () => {
     const total = applicants.length;
@@ -1669,9 +2426,21 @@ export function AppProvider({ children }) {
     const maleCount = applicants.filter(a => a.gender === 'Male').length;
     const femaleCount = applicants.filter(a => a.gender === 'Female').length;
 
-    const bySchool = schools.map(school => ({
-      name: school.name,
-      count: applicants.filter(a => a.school === school.name).length,
+    // School names: the eligible-schools catalog (managed in System Settings,
+    // Firestore-backed) PLUS any school name that actually appears on a
+    // scholar record. Scholar records store the full catalog name (e.g.
+    // "Luna Goco Colleges, Inc."), not the old hardcoded short names ("Luna
+    // Colleges") that used to live here — using those meant "Scholars per
+    // HEI" always counted zero. Mirrors the same fix already applied to the
+    // Applications/Attendance/Reports/Scholars pages.
+    const schoolNames = Array.from(new Set([
+      ...(catalogSchools || []).map(s => s?.name).filter(Boolean),
+      ...applicants.map(a => a?.school).filter(Boolean),
+    ])).sort((a, b) => a.localeCompare(b));
+
+    const bySchool = schoolNames.map(name => ({
+      name,
+      count: applicants.filter(a => matchesExact(a.school, name)).length,
     }));
 
     const totalGranted = applicants.reduce((sum, a) => sum + (a.amountGranted || 0), 0);
@@ -1701,8 +2470,9 @@ export function AppProvider({ children }) {
     }
 
     // Check semester limit (8 semesters = 4 years)
-    if (applicant.semestersUsed >= 8) {
-      reasons.push('Exceeded maximum scholarship duration (8 semesters)');
+    const semMax = systemSettings.numberOfSemesters || 8;
+    if (applicant.semestersUsed >= semMax) {
+      reasons.push(`Exceeded maximum scholarship duration (${semMax} semesters)`);
     }
 
     // Check attendance (more than 2 absences)
@@ -1734,7 +2504,10 @@ export function AppProvider({ children }) {
     scholarHistory,
     archiveApplicant,
     archiveScholar,
+    endOfSemesterScholarsCleanup,
     enrollActiveScholarsInSemester,
+    verifyScholarEnrollment,
+    setGradesEvaluation,
     restoreFromHistory,
     restoreScholarFromHistory,
     generateRankings,
@@ -1759,10 +2532,10 @@ export function AppProvider({ children }) {
     updateCatalogItem,
     deleteCatalogItem,
     resetCatalogToDefaults,
-    activities,
-    addActivity,
-    updateActivity,
-    deleteActivity,
+    events,
+    addEvent,
+    updateEvent,
+    deleteEvent,
     announcements,
     addAnnouncement,
     updateAnnouncement,
