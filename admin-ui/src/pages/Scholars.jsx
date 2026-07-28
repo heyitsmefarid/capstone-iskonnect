@@ -27,21 +27,31 @@ import {
   ArrowUp,
   ArrowDown,
   Building2,
-  FileText,
   Upload,
   Download,
+  RotateCcw,
 } from 'lucide-react';
 import { matchesExact, matchesSearch } from '../utils/filtering';
 import { bulkCreateScholars } from '../services/backendApi';
+import { validateImportRows } from '../utils/scholarImportValidation';
 
 export default function Scholars() {
-  const { applicants, catalogSchools, catalogPrograms, updateApplicant } = useApp();
+  const { applicants, catalogSchools, catalogPrograms, updateApplicant, verifyScholarEnrollment, systemSettings, schoolYears } = useApp();
+  const numberOfSemesters = systemSettings?.numberOfSemesters || 8;
   const { onMenuClick } = useOutletContext() || {};
   const SCHOLARSHIP_CAP = 25000;
 
-  const computeReflectedAmount = (tuitionFee) => {
+  // Caps at the SPECIFIC program's configured Tuition Cap when known, falling
+  // back to the flat SCHOLARSHIP_CAP otherwise — mirrors AppContext.jsx's
+  // resolvePerSemGrant so this preview never disagrees with what actually
+  // gets persisted when a semester is granted.
+  const computeReflectedAmount = (tuitionFee, school, program) => {
     const normalizedTuition = Math.max(0, Number(tuitionFee) || 0);
-    return Math.min(normalizedTuition, SCHOLARSHIP_CAP);
+    const match =
+      (catalogPrograms || []).find((p) => p.name === program && p.school === school) ||
+      (catalogPrograms || []).find((p) => p.name === program);
+    const cap = match?.tuitionCap != null ? Math.max(0, Number(match.tuitionCap) || 0) : SCHOLARSHIP_CAP;
+    return Math.min(normalizedTuition, cap);
   };
 
   // The scholar app stores the profile photo as a full URL, a data URI, or raw
@@ -51,6 +61,19 @@ export default function Scholars() {
     if (!raw) return '';
     if (raw.startsWith('http') || raw.startsWith('data:')) return raw;
     return `data:image/jpeg;base64,${raw}`;
+  };
+
+  // Scholar-supplied file URLs (e.g. corFileUrl) are Firestore fields, not
+  // guaranteed-safe values — `users/{id}` write rules allow any signed-in
+  // session to set them. Reject anything that isn't a real http(s) link
+  // before it ever reaches an <a href>, so a javascript: URI can't execute.
+  const isSafeHttpUrl = (url) => {
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    } catch {
+      return false;
+    }
   };
 
   // Looks up the tuition cap configured for the scholar's program in the shared
@@ -75,7 +98,9 @@ export default function Scholars() {
   // capped reflection of the effective tuition (program cap).
   const getPerSemGranted = (scholar) => {
     const explicitGrant = Math.max(0, Number(scholar?.amountGranted) || 0);
-    return explicitGrant > 0 ? explicitGrant : computeReflectedAmount(getEffectiveTuition(scholar));
+    return explicitGrant > 0
+      ? explicitGrant
+      : computeReflectedAmount(getEffectiveTuition(scholar), scholar?.school, scholar?.program);
   };
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,18 +121,95 @@ export default function Scholars() {
     return yearLevel && yearLevel <= 4 ? `${ordinals[yearLevel - 1]} Year` : `Year ${yearLevel}`;
   };
 
-  // Year level is derived from progress: every 2 completed semesters advances
-  // the scholar one year level (0-1 sems = 1st year, 2-3 = 2nd, 4-5 = 3rd,
-  // 6+ = 4th). The scholarship is 4 years / 8 semesters, so there is no 5th year.
+  // Year level advances every 2 completed semesters: sem 1-2 -> year 1,
+  // sem 3-4 -> year 2, etc. — matches the ceil(semestersUsed/2) convention
+  // used when a semester is granted (verifyScholarEnrollment in AppContext).
   const getEffectiveYearLevel = (scholar) => {
     const sems = Math.max(0, Number(scholar?.semestersUsed) || 0);
-    return Math.min(4, Math.floor(sems / 2) + 1);
+    const maxYear = Math.ceil(numberOfSemesters / 2);
+    return Math.min(maxYear, Math.max(1, Math.ceil(sems / 2)));
   };
 
   // Helper function to format academic year
   const getAcademicYear = (year) => {
     if (!year) return 'N/A';
     return `${year}-${year + 1}`;
+  };
+
+  // Admin confirmation flag read by Reports.jsx (Enrollment Verification /
+  // Agreement Monitoring reports) — nothing previously set it, so those
+  // reports always fell back to inferred text instead of a real admin call.
+  // A "Not Enrolled" verdict must carry a reason so the front office knows
+  // why, without having to track the scholar down again.
+  const handleEvaluateEnrollment = async () => {
+    const currentStatus = selectedScholar.enrollmentStatus === 'Verified' ? 'Verified' : 'Not Enrolled';
+    const currentReason = selectedScholar.enrollmentNotEnrolledReason || '';
+
+    const { value: formValues } = await Swal.fire({
+      title: 'Evaluate Enrollment',
+      html: `
+        <div class="status-dropdown-wrap">
+          <label for="enrollment-select" class="status-dropdown-label">Is the scholar enrolled?</label>
+          <select id="enrollment-select" class="status-dropdown">
+            <option value="Verified" ${currentStatus === 'Verified' ? 'selected' : ''}>Enrolled</option>
+            <option value="Not Enrolled" ${currentStatus === 'Not Enrolled' ? 'selected' : ''}>Not Enrolled</option>
+          </select>
+        </div>
+        <div id="enrollment-reason-wrap" class="status-dropdown-wrap" style="margin-top:12px;${currentStatus === 'Not Enrolled' ? '' : 'display:none;'}">
+          <label for="enrollment-reason" class="status-dropdown-label">Reason for not enrolling</label>
+          <textarea id="enrollment-reason" class="status-reason-textarea"></textarea>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Save Evaluation',
+      confirmButtonColor: 'var(--primary)',
+      cancelButtonColor: '#6b7280',
+      didOpen: () => {
+        const select = document.getElementById('enrollment-select');
+        const reasonWrap = document.getElementById('enrollment-reason-wrap');
+        const reasonField = document.getElementById('enrollment-reason');
+        // Set as a value assignment (not HTML interpolation) so a reason
+        // containing markup/script is treated as plain text, not rendered.
+        if (reasonField) reasonField.value = currentReason;
+        select?.addEventListener('change', () => {
+          reasonWrap.style.display = select.value === 'Not Enrolled' ? '' : 'none';
+        });
+      },
+      preConfirm: () => {
+        const status = document.getElementById('enrollment-select')?.value;
+        const reason = document.getElementById('enrollment-reason')?.value.trim() || '';
+        if (status === 'Not Enrolled' && !reason) {
+          Swal.showValidationMessage('Please provide a reason why the scholar is not enrolled.');
+          return false;
+        }
+        return { status, reason: status === 'Not Enrolled' ? reason : '' };
+      },
+      customClass: {
+        popup: 'eval-status-modal',
+        actions: 'eval-status-actions',
+      },
+    });
+
+    if (!formValues) return;
+
+    const { status: newStatus, reason } = formValues;
+    try {
+      // Setting "Verified" also grants the scholar's currently active term —
+      // see verifyScholarEnrollment: a semester only counts once confirmed.
+      // Merge its return value so Semesters Used / Semester Records /
+      // Financial Information refresh in the modal immediately.
+      const updated = verifyScholarEnrollment(selectedScholar.id, newStatus, reason);
+      setSelectedScholar({ ...selectedScholar, ...updated });
+      Swal.fire({
+        icon: 'success',
+        title: 'Updated!',
+        text: `Enrollment status set to ${newStatus === 'Verified' ? 'Enrolled' : 'Not Enrolled'}`,
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update enrollment status' });
+    }
   };
 
   // Reset to page 1 when filters change
@@ -205,6 +307,40 @@ export default function Scholars() {
     setSelectedScholar(scholar);
   };
 
+  // Reverse a termination directly from the Scholars list — returns the scholar
+  // to Active without waiting for the end-of-semester archive. The scholar's
+  // termination reason is cleared so a fresh evaluation starts clean.
+  const handleReactivate = async (scholar) => {
+    const result = await Swal.fire({
+      title: 'Reactivate scholar?',
+      html: `<b>${scholar.firstName} ${scholar.lastName}</b> will be moved back to <b>Active</b> and regain access to their scholarship.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Reactivate',
+      confirmButtonColor: 'var(--primary)',
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await updateApplicant(scholar.id, {
+        status: 'active',
+        terminationReason: '',
+      });
+      Swal.fire({
+        icon: 'success',
+        title: 'Reactivated',
+        text: `${scholar.firstName} ${scholar.lastName} is active again.`,
+        timer: 1800,
+        showConfirmButton: false,
+      });
+    } catch (e) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Reactivation failed',
+        text: e?.message || 'Could not reactivate the scholar.',
+      });
+    }
+  };
+
   const getStatusIcon = (status) => {
     switch (status) {
       case 'approved':
@@ -231,7 +367,10 @@ export default function Scholars() {
 
   const getSemesterRecords = (scholar) => {
     const grades = scholar?.grades || [];
-    const coes = scholar?.certificatesOfEnrollment || [];
+    // The scholar app writes COR uploads to `corSubmissions` (see
+    // CorSubmissionsNotifier in grades_provider.dart) — `certificatesOfEnrollment`
+    // is never written by either app, so reading it here always found nothing.
+    const coes = scholar?.corSubmissions || [];
     const enrolled = scholar?.enrolledSemesters || [];
 
     const recordMap = new Map();
@@ -263,9 +402,9 @@ export default function Scholars() {
     });
 
     coes.forEach((coeEntry) => {
-      const key = `${coeEntry.schoolYear || 'N/A'}|${coeEntry.semester || 'N/A'}`;
+      const key = `${coeEntry.academicYear || 'N/A'}|${coeEntry.semester || 'N/A'}`;
       const existing = recordMap.get(key) || {
-        schoolYear: coeEntry.schoolYear || 'N/A',
+        schoolYear: coeEntry.academicYear || 'N/A',
         semester: coeEntry.semester || 'N/A',
         gradeValue: null,
         subjects: [],
@@ -273,8 +412,11 @@ export default function Scholars() {
 
       recordMap.set(key, {
         ...existing,
-        corStatus: coeEntry.status || 'pending',
+        // corSubmissions carries no explicit status field — its presence
+        // (a fileUrl) is itself the submission.
+        corStatus: coeEntry.fileUrl ? 'submitted' : 'pending',
         corFileName: coeEntry.fileName || null,
+        corFileUrl: coeEntry.fileUrl || null,
       });
     });
 
@@ -304,10 +446,13 @@ export default function Scholars() {
 
     const semesterRows = enrolled.map((entry, i) => {
       const sy = startYear + Math.floor(i / 2); // new school year every 2 sems
+      const isOnHold = entry.status === 'on_hold';
       return {
-        schoolYear: `${sy}-${sy + 1}`,
-        semester: i % 2 === 0 ? '1st Semester' : '2nd Semester',
-        grantedAmount: perSemGranted || 0,
+        schoolYear: entry.schoolYear || `${sy}-${sy + 1}`,
+        semester: entry.semester || (i % 2 === 0 ? '1st Semester' : '2nd Semester'),
+        // On-hold semesters receive no grant; use stored amount otherwise.
+        grantedAmount: isOnHold ? 0 : (typeof entry.grantedAmount === 'number' ? entry.grantedAmount : (perSemGranted || 0)),
+        status: entry.status || 'disbursed',
       };
     });
 
@@ -330,13 +475,17 @@ export default function Scholars() {
   const handleDownloadTemplate = () => {
     const example = [
       {
-        'Full Name': 'Juan Dela Cruz',
+        'Scholar ID': '',
+        'First Name': 'Juan',
+        'Middle Name': '',
+        'Last Name': 'Dela Cruz',
         Email: 'juan.delacruz@example.com',
         School: 'Divine Word College',
         Program: 'Bachelor of Science in Information Technology',
-        'Year Level': 2,
-        'Number of Semesters': 2,
+        'Year Level': '2',
         Status: 'Active',
+        'Total Scholarship Semesters': '8',
+        'Active Scholarship Semesters': '2',
       },
     ];
     const ws = XLSX.utils.json_to_sheet(example);
@@ -386,17 +535,38 @@ export default function Scholars() {
         return;
       }
 
+      const existingEmails = new Set(applicants.map((a) => (a.email || '').trim().toLowerCase()).filter(Boolean));
+      const existingScholarIds = new Set(applicants.map((a) => a.scholarId).filter(Boolean));
+      const validated = validateImportRows(rows, { existingEmails, existingScholarIds });
+
+      const errorRows = validated.filter((r) => !r.valid);
+      const okRows = validated.filter((r) => r.valid);
+      const previewHtml = `
+        <div style="max-height:300px;overflow:auto;text-align:left;font-size:0.85em">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr><th>Row</th><th>Name</th><th>Status</th></tr></thead>
+            <tbody>
+              ${validated.map((r) => `
+                <tr style="color:${r.valid ? (r.warnings.length ? '#b8860b' : '#2e7d32') : '#c62828'}">
+                  <td>${r.index + 1}</td>
+                  <td>${r.row['First Name'] || ''} ${r.row['Last Name'] || ''}</td>
+                  <td>${r.errors.concat(r.warnings).join('; ') || 'OK'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+
       const confirm = await Swal.fire({
-        title: 'Create scholar accounts?',
-        html:
-          `Found <b>${rows.length}</b> row(s) in <b>${file.name}</b>.<br/>` +
-          `A login account will be created for each, with a temporary password (their last name + a fixed suffix).`,
-        icon: 'question',
+        title: 'Review import',
+        html: `${okRows.length} of ${validated.length} row(s) will be imported (${errorRows.length} have errors and will be skipped).${previewHtml}`,
+        icon: errorRows.length ? 'warning' : 'question',
         showCancelButton: true,
-        confirmButtonText: 'Create accounts',
+        confirmButtonText: `Create ${okRows.length} account(s)`,
         confirmButtonColor: 'var(--primary)',
       });
-      if (!confirm.isConfirmed) return;
+      if (!confirm.isConfirmed || okRows.length === 0) return;
+
+      const importRows = okRows.map((r) => r.row);
 
       // Send in chunks so a large migration never hits the function timeout,
       // and the admin sees live progress.
@@ -404,13 +574,13 @@ export default function Scholars() {
       const allResults = [];
       Swal.fire({
         title: 'Creating accounts…',
-        html: `0 / ${rows.length}`,
+        html: `0 / ${importRows.length}`,
         allowOutsideClick: false,
         didOpen: () => Swal.showLoading(),
       });
 
-      for (let i = 0; i < rows.length; i += IMPORT_CHUNK_SIZE) {
-        const chunk = rows.slice(i, i + IMPORT_CHUNK_SIZE);
+      for (let i = 0; i < importRows.length; i += IMPORT_CHUNK_SIZE) {
+        const chunk = importRows.slice(i, i + IMPORT_CHUNK_SIZE);
         const res = await bulkCreateScholars(chunk);
         totals.created += res.created || 0;
         totals.skipped += res.skipped || 0;
@@ -418,7 +588,7 @@ export default function Scholars() {
         if (Array.isArray(res.results)) allResults.push(...res.results);
         Swal.update({
           title: 'Creating accounts…',
-          html: `${Math.min(i + IMPORT_CHUNK_SIZE, rows.length)} / ${rows.length}`,
+          html: `${Math.min(i + IMPORT_CHUNK_SIZE, importRows.length)} / ${importRows.length}`,
         });
         Swal.showLoading();
       }
@@ -622,6 +792,7 @@ export default function Scholars() {
                     <SortIcon column="status" />
                   </div>
                 </th>
+                <th>Enrolled</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -698,10 +869,10 @@ export default function Scholars() {
                       padding: '0.25rem 0.5rem',
                       borderRadius: '0.25rem',
                       fontWeight: 700,
-                      background: scholar.semestersUsed >= 6 ? 'rgba(234, 179, 8, 0.18)' : 'rgba(45, 149, 150, 0.18)',
-                      color: scholar.semestersUsed >= 6 ? '#fbbf24' : 'var(--primary-light)'
+                      background: scholar.semestersUsed >= numberOfSemesters - 2 ? 'rgba(234, 179, 8, 0.18)' : 'rgba(45, 149, 150, 0.18)',
+                      color: scholar.semestersUsed >= numberOfSemesters - 2 ? '#fbbf24' : 'var(--primary-light)'
                     }}>
-                      {scholar.semestersUsed || 0}/8
+                      {scholar.semestersUsed || 0}/{numberOfSemesters}
                     </span>
                   </td>
                   <td>
@@ -711,13 +882,41 @@ export default function Scholars() {
                     </span>
                   </td>
                   <td>
-                    <button
-                      className="btn btn-sm btn-primary"
-                      onClick={() => handleViewDetails(scholar)}
-                    >
-                      <Eye size={16} />
-                      View
-                    </button>
+                    <span className={`enrollment-status-badge ${
+                      scholar.enrollmentStatus === 'Verified'
+                        ? 'verified'
+                        : scholar.enrollmentStatus === 'Not Enrolled'
+                        ? 'not-enrolled'
+                        : 'unverified'
+                    }`}>
+                      {scholar.enrollmentStatus === 'Verified'
+                        ? 'ENROLLED'
+                        : scholar.enrollmentStatus === 'Not Enrolled'
+                        ? 'NOT ENROLLED'
+                        : 'FOR VERIFICATION'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => handleViewDetails(scholar)}
+                      >
+                        <Eye size={16} />
+                        View
+                      </button>
+                      {scholar.status === 'terminated' && (
+                        <button
+                          className="btn btn-sm"
+                          title="Reactivate — return this scholar to Active"
+                          onClick={() => handleReactivate(scholar)}
+                          style={{ background: 'rgba(45, 149, 150, 0.15)', color: 'var(--primary-light)' }}
+                        >
+                          <RotateCcw size={16} />
+                          Reactivate
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -813,9 +1012,35 @@ export default function Scholars() {
                   <div>
                     <h3>{selectedScholar.firstName} {selectedScholar.middleName} {selectedScholar.lastName}</h3>
                     <p className="scholar-id-large">{selectedScholar.scholarId}</p>
-                    <div className={`status-badge-large status-${selectedScholar.status}`}>
-                      {selectedScholar.status?.toUpperCase()}
+                    <div className="status-badge-row">
+                      <div className={`status-badge-large status-${selectedScholar.status}`}>
+                        {selectedScholar.status?.toUpperCase()}
+                      </div>
+                      <span className={`enrollment-status-badge ${
+                        selectedScholar.enrollmentStatus === 'Verified'
+                          ? 'verified'
+                          : selectedScholar.enrollmentStatus === 'Not Enrolled'
+                          ? 'not-enrolled'
+                          : 'unverified'
+                      }`}>
+                        {selectedScholar.enrollmentStatus === 'Verified'
+                          ? 'ENROLLED'
+                          : selectedScholar.enrollmentStatus === 'Not Enrolled'
+                          ? 'NOT ENROLLED'
+                          : 'FOR VERIFICATION'}
+                      </span>
+                      <button
+                        className="btn-enrollment-toggle"
+                        onClick={() => handleEvaluateEnrollment()}
+                      >
+                        Evaluate Enrollment
+                      </button>
                     </div>
+                    {selectedScholar.enrollmentStatus === 'Not Enrolled' && selectedScholar.enrollmentNotEnrolledReason && (
+                      <p className="enrollment-reason-note">
+                        Reason: {selectedScholar.enrollmentNotEnrolledReason}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -871,7 +1096,7 @@ export default function Scholars() {
                     </div>
                     <div className="academic-item">
                       <span className="label">Semesters Used</span>
-                      <span className="value">{selectedScholar.semestersUsed || 0} / 8</span>
+                      <span className="value">{selectedScholar.semestersUsed || 0} / {numberOfSemesters}</span>
                     </div>
                     <div className="academic-item">
                       <span className="label">Academic Year Granted</span>
@@ -886,7 +1111,7 @@ export default function Scholars() {
                       fontWeight: 700,
                       color: 'var(--text-primary)'
                     }}>
-                      Grades and COR per Semester
+                      COR per Semester
                     </h5>
 
                     {getSemesterRecords(selectedScholar).length > 0 ? (
@@ -896,7 +1121,7 @@ export default function Scholars() {
                             <tr>
                               <th>School Year</th>
                               <th>Semester</th>
-                              <th>Subjects</th>
+                              <th>COR</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -905,28 +1130,23 @@ export default function Scholars() {
                                 <td>{record.schoolYear}</td>
                                 <td>{record.semester}</td>
                                 <td>
-                                  {record.subjects?.length ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                                      {record.subjects.map((subject, idx) => (
-                                        <div
-                                          key={`${record.schoolYear}-${record.semester}-${idx}`}
-                                          style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            gap: '0.5rem',
-                                            fontSize: '0.8125rem',
-                                          }}
-                                        >
-                                          <span style={{ color: 'var(--text-primary)' }}>{subject.name}</span>
-                                          <span style={{ fontWeight: 700, color: 'var(--primary-light)', whiteSpace: 'nowrap' }}>
-                                            {subject.grade ?? 'N/A'}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
+                                  {isSafeHttpUrl(record.corFileUrl) ? (
+                                    <a
+                                      href={record.corFileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      style={{
+                                        color: 'var(--primary-light)',
+                                        textDecoration: 'underline',
+                                        fontWeight: 600,
+                                        fontSize: '0.8125rem',
+                                      }}
+                                    >
+                                      View COR
+                                    </a>
                                   ) : (
                                     <span style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
-                                      No Subjects
+                                      Not Submitted
                                     </span>
                                   )}
                                 </td>
@@ -942,76 +1162,6 @@ export default function Scholars() {
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* Certificate of Enrollment Section */}
-                <div className="coe-section">
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'flex-start',
-                    alignItems: 'center',
-                    marginBottom: '1.5rem',
-                    padding: '0.75rem 1rem',
-                    background: 'rgba(16, 185, 129, 0.1)',
-                    borderRadius: '0.5rem',
-                    border: '1px solid rgba(16, 185, 129, 0.2)'
-                  }}>
-                    <h4 style={{ margin: 0, color: 'var(--success)', fontSize: '1.125rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <FileText size={20} /> Certificate of Enrollment
-                    </h4>
-                  </div>
-
-                  {(selectedScholar.certificatesOfEnrollment || []).length > 0 ? (
-                    <div className="coe-table-container">
-                      <table className="coe-table">
-                        <thead>
-                          <tr>
-                            <th>Semester</th>
-                            <th>School Year</th>
-                            <th>Date Submitted</th>
-                            <th>View</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(selectedScholar.certificatesOfEnrollment || []).sort((a, b) => {
-                            if (a.schoolYear !== b.schoolYear) return a.schoolYear.localeCompare(b.schoolYear);
-                            const semOrder = { '1st Semester': 1, '2nd Semester': 2 };
-                            return (semOrder[a.semester] || 0) - (semOrder[b.semester] || 0);
-                          }).map(coe => (
-                            <tr key={coe.id}>
-                              <td>{coe.semester}</td>
-                              <td>{coe.schoolYear}</td>
-                              <td>{coe.dateSubmitted}</td>
-                              <td>
-                                {coe.fileUrl ? (
-                                  <a
-                                    href={coe.fileUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    style={{
-                                      color: 'var(--primary-light)',
-                                      textDecoration: 'underline',
-                                      fontWeight: 600,
-                                      fontSize: '0.8125rem',
-                                    }}
-                                  >
-                                    View File/Image
-                                  </a>
-                                ) : (
-                                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>N/A</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="coe-empty">
-                      <FileText size={32} style={{ opacity: 0.3 }} />
-                      <p>No certificates of enrollment submitted yet.</p>
-                    </div>
-                  )}
                 </div>
 
                 <div className="financial-section">
@@ -1046,15 +1196,39 @@ export default function Scholars() {
                           onClick={async () => {
                             try {
                               const normalizedTuition = Math.max(0, Number(financialData.tuitionFee) || 0);
-                              const reflectedAmount = computeReflectedAmount(normalizedTuition);
+                              const reflectedAmount = computeReflectedAmount(
+                                normalizedTuition,
+                                selectedScholar.school,
+                                selectedScholar.program
+                              );
+
+                              // The currently-active term's enrolledSemesters
+                              // entry (if any) was locked in using whatever
+                              // tuition fee was on file at the time — it hasn't
+                              // actually been disbursed yet, so correct it to
+                              // match the new rate too. Past/completed
+                              // semesters stay frozen as historical record.
+                              const activeSy = (schoolYears || []).find((s) => s.isActive);
+                              const activeSem = activeSy?.semesters?.find((s) => s.isActive);
+                              const enrolledSemesters = (selectedScholar.enrolledSemesters || []).map((entry) =>
+                                activeSy && activeSem &&
+                                entry.schoolYear === activeSy.label &&
+                                entry.semester === activeSem.name &&
+                                entry.status !== 'on_hold'
+                                  ? { ...entry, grantedAmount: reflectedAmount }
+                                  : entry
+                              );
+
                               await updateApplicant(selectedScholar.id, {
                                 tuitionFee: normalizedTuition,
                                 amountGranted: reflectedAmount,
+                                enrolledSemesters,
                               });
                               setSelectedScholar({
                                 ...selectedScholar,
                                 tuitionFee: normalizedTuition,
                                 amountGranted: reflectedAmount,
+                                enrolledSemesters,
                               });
                               setIsEditingFinancial(false);
                               Swal.fire({
@@ -1106,7 +1280,7 @@ export default function Scholars() {
                       <span className="value">
                         ₱{(
                           isEditingFinancial
-                            ? computeReflectedAmount(financialData.tuitionFee)
+                            ? computeReflectedAmount(financialData.tuitionFee, selectedScholar.school, selectedScholar.program)
                             : getPerSemGranted(selectedScholar)
                         ).toLocaleString()}
                       </span>
@@ -1119,18 +1293,22 @@ export default function Scholars() {
                         fontSize: '1.25rem',
                         textShadow: '0 0 20px rgba(16, 185, 129, 0.3)'
                       }}>
-                        ₱{((selectedScholar.semestersUsed || 0) * (
-                          isEditingFinancial
-                            ? computeReflectedAmount(financialData.tuitionFee)
-                            : getPerSemGranted(selectedScholar)
-                        )).toLocaleString()}
+                        ₱{(isEditingFinancial
+                          // While editing, preview uses the new rate × disbursed sems
+                          ? (selectedScholar.enrolledSemesters || []).filter(e => e.status !== 'on_hold').length * computeReflectedAmount(financialData.tuitionFee, selectedScholar.school, selectedScholar.program)
+                          // Otherwise sum the actual grantedAmount stored per semester
+                          : (selectedScholar.enrolledSemesters || []).reduce((sum, e) => {
+                              if (e.status === 'on_hold') return sum;
+                              return sum + (typeof e.grantedAmount === 'number' ? e.grantedAmount : getPerSemGranted(selectedScholar));
+                            }, 0)
+                        ).toLocaleString()}
                       </span>
                     </div>
                   </div>
 
                   {(() => {
                     const perSemGranted = isEditingFinancial
-                      ? computeReflectedAmount(financialData.tuitionFee)
+                      ? computeReflectedAmount(financialData.tuitionFee, selectedScholar.school, selectedScholar.program)
                       : getPerSemGranted(selectedScholar);
                     const { semesterRows } = getGrantBreakdown(selectedScholar, perSemGranted);
                     const totalGranted = semesterRows.reduce((sum, row) => sum + row.grantedAmount, 0);
@@ -1420,6 +1598,13 @@ export default function Scholars() {
           margin: 0.5rem 0;
         }
 
+        .status-badge-row {
+          display: flex;
+          align-items: center;
+          gap: 0.625rem;
+          flex-wrap: wrap;
+        }
+
         .status-badge-large {
           display: inline-block;
           padding: 0.5rem 1rem;
@@ -1460,16 +1645,14 @@ export default function Scholars() {
         }
 
         .academic-section,
-        .financial-section,
-        .coe-section {
+        .financial-section {
           margin-top: 2rem;
           padding-top: 2rem;
           border-top: 2px solid var(--border-color);
         }
 
         .academic-section h4,
-        .financial-section h4,
-        .coe-section h4 {
+        .financial-section h4 {
           font-size: 1.125rem;
           font-weight: 700;
           margin-bottom: 1.25rem;
@@ -1545,38 +1728,6 @@ export default function Scholars() {
           gap: 0.5rem;
           align-items: center;
           padding-bottom: 2px;
-        }
-
-        .coe-table-container {
-          border-radius: 0.5rem;
-          overflow: hidden;
-          border: 1px solid var(--border-color);
-        }
-        .coe-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 0.875rem;
-        }
-        .coe-table thead {
-          background: var(--bg-secondary);
-        }
-        .coe-table th {
-          padding: 0.75rem 1rem;
-          text-align: left;
-          font-weight: 600;
-          color: var(--text-muted);
-          font-size: 0.8125rem;
-          text-transform: uppercase;
-          letter-spacing: 0.025em;
-          border-bottom: 1px solid var(--border-color);
-        }
-        .coe-table td {
-          padding: 0.75rem 1rem;
-          color: var(--text-primary);
-          border-bottom: 1px solid rgba(51, 65, 85, 0.5);
-        }
-        .coe-table tbody tr:hover {
-          background: rgba(45, 149, 150, 0.05);
         }
 
         .coe-status {
@@ -1761,6 +1912,152 @@ export default function Scholars() {
           background: var(--primary-dark);
           box-shadow: 0 4px 8px rgba(45, 149, 150, 0.4);
           transform: translateY(-1px);
+        }
+
+        .enrollment-status-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 0.25rem 0.625rem;
+          border-radius: 9999px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 0.025em;
+        }
+
+        .enrollment-status-badge.verified {
+          background: rgba(34, 197, 94, 0.15);
+          color: #4ade80;
+          border: 1px solid rgba(34, 197, 94, 0.4);
+        }
+
+        .enrollment-status-badge.unverified {
+          background: rgba(148, 163, 184, 0.15);
+          color: var(--text-secondary);
+          border: 1px solid var(--border-color);
+        }
+
+        .enrollment-status-badge.not-enrolled {
+          background: rgba(239, 68, 68, 0.15);
+          color: #f87171;
+          border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .enrollment-reason-note {
+          margin: 0.375rem 0 0;
+          font-size: 0.8rem;
+          color: #f87171;
+        }
+
+        .btn-enrollment-toggle {
+          padding: 0.375rem 0.75rem;
+          background: transparent;
+          color: var(--primary-light);
+          border: 1px solid var(--primary);
+          border-radius: 0.375rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .btn-enrollment-toggle:hover {
+          background: rgba(45, 149, 150, 0.12);
+        }
+
+        /* "Evaluate Enrollment" SweetAlert2 dialog — self-contained (doesn't
+           rely on another page's styled-jsx having mounted first). */
+        :global(.swal2-popup.eval-status-modal) {
+          width: 460px !important;
+          border-radius: 16px !important;
+          padding: 1.6rem 1.4rem 1.2rem !important;
+        }
+
+        :global(.swal2-popup.eval-status-modal .swal2-title) {
+          font-size: 1.5rem;
+          margin-bottom: 0.9rem !important;
+        }
+
+        :global(.swal2-popup.eval-status-modal .status-dropdown-wrap) {
+          width: 100%;
+          display: flex;
+          flex-direction: column;
+          gap: 0.45rem;
+          margin-top: 0.2rem;
+          text-align: left;
+        }
+
+        :global(.swal2-popup.eval-status-modal .status-dropdown-label) {
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: var(--text-secondary);
+          letter-spacing: 0.01em;
+        }
+
+        :global(.swal2-popup.eval-status-modal .status-dropdown) {
+          width: 100% !important;
+          min-height: 46px;
+          border-radius: 10px;
+          padding: 0 12px;
+          font-size: 0.95rem;
+          background: var(--bg-secondary) !important;
+          color: var(--text-primary) !important;
+          border: 1px solid var(--border-color) !important;
+          appearance: none;
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%), linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+          background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px);
+          background-size: 6px 6px, 6px 6px;
+          background-repeat: no-repeat;
+          color-scheme: dark;
+        }
+
+        :global(.swal2-popup.eval-status-modal .status-dropdown:focus) {
+          outline: none;
+          border-color: var(--primary) !important;
+          box-shadow: 0 0 0 3px rgba(45, 149, 150, 0.2) !important;
+        }
+
+        :global(.swal2-popup.eval-status-modal .status-dropdown option) {
+          background: var(--card-bg);
+          color: var(--text-primary);
+        }
+
+        :global(.swal2-popup.eval-status-modal .status-reason-textarea) {
+          width: 100% !important;
+          min-height: 90px;
+          margin: 0 !important;
+          border-radius: 10px;
+          padding: 10px 12px;
+          font-size: 0.9rem;
+          font-family: inherit;
+          resize: vertical;
+          background: var(--bg-secondary) !important;
+          color: var(--text-primary) !important;
+          border: 1px solid var(--border-color) !important;
+          box-shadow: none !important;
+        }
+
+        :global(.swal2-popup.eval-status-modal .status-reason-textarea:focus) {
+          outline: none;
+          border-color: var(--primary) !important;
+          box-shadow: 0 0 0 3px rgba(45, 149, 150, 0.2) !important;
+        }
+
+        :global(.swal2-popup.eval-status-modal .status-reason-textarea::placeholder) {
+          color: var(--text-secondary);
+        }
+
+        :global(.swal2-actions.eval-status-actions) {
+          width: 100%;
+          justify-content: center;
+          gap: 10px;
+        }
+
+        :global(.swal2-actions.eval-status-actions .swal2-confirm),
+        :global(.swal2-actions.eval-status-actions .swal2-cancel) {
+          min-width: 92px;
+          border-radius: 10px !important;
         }
 
         .btn-success-sm,
