@@ -30,9 +30,12 @@ import {
   Upload,
   Download,
   RotateCcw,
+  KeyRound,
+  Ban,
+  UserCheck,
 } from 'lucide-react';
 import { matchesExact, matchesSearch } from '../utils/filtering';
-import { bulkCreateScholars } from '../services/backendApi';
+import { bulkCreateScholars, regenerateScholarPassword, setScholarAccountDisabled } from '../services/backendApi';
 import { validateImportRows } from '../utils/scholarImportValidation';
 
 // SweetAlert2's `html:` option renders via innerHTML (unlike `text:`, which is
@@ -118,6 +121,7 @@ export default function Scholars() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterYearLevel, setFilterYearLevel] = useState('');
   const [filterYearAwarded, setFilterYearAwarded] = useState('');
+  const [filterAccountStatus, setFilterAccountStatus] = useState('');
   const [selectedScholar, setSelectedScholar] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -225,7 +229,7 @@ export default function Scholars() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterSchool, filterStatus, filterYearLevel, filterYearAwarded]);
+  }, [searchTerm, filterSchool, filterStatus, filterYearLevel, filterYearAwarded, filterAccountStatus]);
 
   // Reset editing state when modal closes or changes
   useEffect(() => {
@@ -278,7 +282,12 @@ export default function Scholars() {
     const matchesStatus = !filterStatus || scholar.status === filterStatus;
     const matchesYearLevel = !filterYearLevel || getEffectiveYearLevel(scholar) === Number(filterYearLevel);
     const matchesYearAwarded = !filterYearAwarded || scholar.yearAwarded === Number(filterYearAwarded);
-    return matchesSearchTerm && matchesSchool && matchesStatus && matchesYearLevel && matchesYearAwarded;
+    // accountDisabled is a new field (Task 9's migration hasn't touched legacy
+    // docs yet) — absence means the account is active, same as `false`.
+    const matchesAccountStatus =
+      !filterAccountStatus ||
+      (filterAccountStatus === 'disabled' ? scholar.accountDisabled === true : scholar.accountDisabled !== true);
+    return matchesSearchTerm && matchesSchool && matchesStatus && matchesYearLevel && matchesYearAwarded && matchesAccountStatus;
   }).sort((a, b) => {
     const { column, direction } = sortConfig;
     const multiplier = direction === 'asc' ? 1 : -1;
@@ -347,6 +356,77 @@ export default function Scholars() {
         icon: 'error',
         title: 'Reactivation failed',
         text: e?.message || 'Could not reactivate the scholar.',
+      });
+    }
+  };
+
+  // Resets a scholar's temporary password via the backend Cloud Function and
+  // shows the new one — same "show credentials" pattern as the bulk import's
+  // downloadCredentials flow, just surfaced inline for a single scholar. Only
+  // callable once the scholar has a real Auth account (scholar.uid set by
+  // bulkCreateScholars or Task 9's legacy migration).
+  const handleResetPassword = async (scholar) => {
+    if (!scholar.uid) return;
+    const confirm = await Swal.fire({
+      title: 'Reset password?',
+      html: `Generate a new temporary password for <b>${escapeHtml(scholar.firstName)} ${escapeHtml(scholar.lastName)}</b>? They will be required to change it on next login.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Reset Password',
+      confirmButtonColor: 'var(--primary)',
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+      const res = await regenerateScholarPassword({ targetUid: scholar.uid });
+      await Swal.fire({
+        icon: 'success',
+        title: 'Password reset',
+        html: `New temporary password for <b>${escapeHtml(scholar.firstName)} ${escapeHtml(scholar.lastName)}</b>:<br/><code style="font-size:1.1em">${escapeHtml(res.password)}</code><br/>They must change it on next login.`,
+        confirmButtonColor: 'var(--primary)',
+      });
+    } catch (err) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Reset failed',
+        text: err?.message || 'Could not reset the password. Check that the backend is running.',
+      });
+    }
+  };
+
+  // Disables/re-enables the scholar's Firebase Auth sign-in via the backend
+  // Cloud Function. Toggles off the scholar's CURRENT accountDisabled state
+  // (defaults to active/false when the field is absent, same as the filter
+  // above), so the confirm dialog and resulting label always describe the
+  // action that is about to happen. Only callable once scholar.uid is set.
+  const handleToggleAccountDisabled = async (scholar) => {
+    if (!scholar.uid) return;
+    const nextDisabled = !scholar.accountDisabled;
+    const confirm = await Swal.fire({
+      title: nextDisabled ? 'Disable account?' : 'Enable account?',
+      html: nextDisabled
+        ? `<b>${escapeHtml(scholar.firstName)} ${escapeHtml(scholar.lastName)}</b> will no longer be able to sign in to the scholar app.`
+        : `<b>${escapeHtml(scholar.firstName)} ${escapeHtml(scholar.lastName)}</b> will regain access to the scholar app.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: nextDisabled ? 'Disable' : 'Enable',
+      confirmButtonColor: nextDisabled ? '#dc2626' : 'var(--primary)',
+    });
+    if (!confirm.isConfirmed) return;
+
+    try {
+      await setScholarAccountDisabled({ targetUid: scholar.uid, disabled: nextDisabled });
+      Swal.fire({
+        icon: 'success',
+        title: nextDisabled ? 'Account disabled' : 'Account enabled',
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (err) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Update failed',
+        text: err?.message || 'Could not update the account. Check that the backend is running.',
       });
     }
   };
@@ -747,6 +827,11 @@ export default function Scholars() {
             <option value="graduated">Graduated</option>
             <option value="terminated">Terminated</option>
           </select>
+          <select value={filterAccountStatus} onChange={(e) => setFilterAccountStatus(e.target.value)}>
+            <option value="">All Accounts</option>
+            <option value="active">Active Accounts</option>
+            <option value="disabled">Disabled Accounts</option>
+          </select>
         </div>
 
         {/* Scholars Data Table */}
@@ -926,6 +1011,54 @@ export default function Scholars() {
                           Reactivate
                         </button>
                       )}
+                      <button
+                        className="btn btn-sm"
+                        title={
+                          !scholar.uid
+                            ? 'Not available — this scholar has no linked account yet'
+                            : 'Reset/regenerate this scholar\'s temporary password'
+                        }
+                        disabled={!scholar.uid}
+                        onClick={() => handleResetPassword(scholar)}
+                        style={{
+                          background: !scholar.uid ? 'var(--bg-secondary)' : 'rgba(59, 130, 246, 0.15)',
+                          color: !scholar.uid ? 'var(--text-secondary)' : '#3b82f6',
+                          opacity: !scholar.uid ? 0.6 : 1,
+                          cursor: !scholar.uid ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        <KeyRound size={16} />
+                        Reset Password
+                      </button>
+                      <button
+                        className="btn btn-sm"
+                        title={
+                          !scholar.uid
+                            ? 'Not available — this scholar has no linked account yet'
+                            : scholar.accountDisabled
+                            ? 'Enable — restore this scholar\'s sign-in access'
+                            : 'Disable — block this scholar from signing in'
+                        }
+                        disabled={!scholar.uid}
+                        onClick={() => handleToggleAccountDisabled(scholar)}
+                        style={{
+                          background: !scholar.uid
+                            ? 'var(--bg-secondary)'
+                            : scholar.accountDisabled
+                            ? 'rgba(45, 149, 150, 0.15)'
+                            : 'rgba(239, 68, 68, 0.15)',
+                          color: !scholar.uid
+                            ? 'var(--text-secondary)'
+                            : scholar.accountDisabled
+                            ? 'var(--primary-light)'
+                            : 'var(--danger-light)',
+                          opacity: !scholar.uid ? 0.6 : 1,
+                          cursor: !scholar.uid ? 'not-allowed' : 'pointer',
+                        }}
+                      >
+                        {scholar.accountDisabled ? <UserCheck size={16} /> : <Ban size={16} />}
+                        {scholar.accountDisabled ? 'Enable' : 'Disable'}
+                      </button>
                     </div>
                   </td>
                 </tr>
