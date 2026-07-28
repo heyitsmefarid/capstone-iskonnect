@@ -59,9 +59,12 @@ exports.setScholarAccountDisabled = onRequest({ cors: true }, async (req, res) =
     if (!targetUid || !isValidUid(targetUid)) throw new AppError('Invalid targetUid.', 400, 'INVALID_UID');
 
     const { auth, db } = getFirebaseAdmin();
+    const docSnap = await db.collection(COLLECTIONS.USERS).doc(targetUid).get();
+    if (!docSnap.exists) throw new AppError('Scholar not found.', 404, 'NOT_FOUND');
+
     const shouldDisable = disabled !== false;
     await auth.updateUser(targetUid, { disabled: shouldDisable });
-    await db.collection(COLLECTIONS.USERS).doc(targetUid).update({ accountDisabled: shouldDisable });
+    await docSnap.ref.update({ accountDisabled: shouldDisable });
 
     await writeAuditLog(db, {
       userId: 'admin-import', userRole: 'admin', action: AUDIT_ACTIONS.UPDATE,
