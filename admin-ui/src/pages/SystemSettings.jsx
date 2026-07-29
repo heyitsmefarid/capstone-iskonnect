@@ -3,10 +3,11 @@ import { useOutletContext } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import {
   Settings, Bell, Shield, Save, RotateCcw, Plus, Trash2, Edit2,
-  School, BookOpen, Activity, Flag, CheckCircle, RefreshCw,
+  School, BookOpen, Activity, Flag, CheckCircle, RefreshCw, CreditCard,
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import { useApp } from '../context/AppContext';
+import { uploadFile, isFileSizeAllowed } from '../services/cloudinaryUpload';
 import {
   getConfig, setConfig as saveConfig,
   getCollection, addItem, updateItem, deleteItem,
@@ -19,7 +20,24 @@ const TABS = [
   { id: 'programs',  label: 'Academic Programs', icon: BookOpen },
   { id: 'statuses',  label: 'Scholarship Statuses', icon: Activity },
   { id: 'stages',    label: 'Timeline Stages',   icon: Flag },
+  { id: 'idCardTemplate', label: 'ID Card Template', icon: CreditCard },
 ];
+
+// Reads an uploaded image's natural pixel dimensions before it's uploaded —
+// needed to compute frontAspectRatio/backAspectRatio so the scholar app can
+// render the background at the right proportions.
+function readImageDimensions(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
 
 const COL_MAP = {
   schools:  'schools',
@@ -35,9 +53,11 @@ const FIRESTORE_TABS = ['schools', 'programs'];
 export default function SystemSettings() {
   const { onMenuClick } = useOutletContext() || {};
   const {
+    systemSettings,
     updateSystemSettings,
     catalogSchools, catalogPrograms,
     addCatalogItem, updateCatalogItem, deleteCatalogItem, resetCatalogToDefaults,
+    idCardTemplate, saveIdCardTemplate,
   } = useApp();
   const [activeTab, setActiveTab] = useState('config');
 
@@ -45,6 +65,7 @@ export default function SystemSettings() {
     organizationName: 'Calapan City Education Department',
     contactEmail: 'ced@calapancity.gov.ph',
     scholarshipCap: 25000,
+    numberOfSemesters: 8,
     sessionTimeoutMinutes: 60,
     enableAutoEvaluation: true,
     requireQrSignature: true,
@@ -56,6 +77,16 @@ export default function SystemSettings() {
   const [editModal, setEditModal] = useState({ open: false, tab: '', item: null });
   const [formValues, setFormValues] = useState({});
   const [programSchoolFilter, setProgramSchoolFilter] = useState('');
+
+  // Scholar ID card template — the images/mayor-name the scholar app composites
+  // onto a scholar's digital ID card.
+  const [templateForm, setTemplateForm] = useState({
+    frontBackgroundUrl: '', frontAspectRatio: null,
+    backBackgroundUrl: '', backAspectRatio: null,
+    mayorName: '', mayorSignatureUrl: '',
+    primaryLogoUrl: '', secondaryLogoUrl: '',
+  });
+  const [templateUploading, setTemplateUploading] = useState('');
 
   // statuses/stages remain local; schools/programs come live from Firestore.
   const loadSettings = useCallback(() => {
@@ -71,10 +102,64 @@ export default function SystemSettings() {
 
   useEffect(() => { loadSettings(); }, [loadSettings]);
 
+  // Number of Semesters is persisted in the shared, Firestore-backed
+  // `systemSettings` (that's what the Scholars/Evaluation pages read). Seed the
+  // form from it so the field always shows the real saved value instead of this
+  // browser's local default — otherwise the form can display 8 while the rest of
+  // the app uses a different stored value (e.g. 9), and they silently disagree.
+  useEffect(() => {
+    if (systemSettings?.numberOfSemesters != null) {
+      setConfig(prev => ({ ...prev, numberOfSemesters: systemSettings.numberOfSemesters }));
+    }
+  }, [systemSettings?.numberOfSemesters]);
+
   // Keep the Firestore-backed catalog in sync with the table data.
   useEffect(() => {
     setData(prev => ({ ...prev, schools: catalogSchools, programs: catalogPrograms }));
   }, [catalogSchools, catalogPrograms]);
+
+  // Seed the ID card template form from whatever is currently saved/active, so
+  // re-opening the tab shows the real active template instead of a blank form.
+  useEffect(() => {
+    if (idCardTemplate) setTemplateForm(prev => ({ ...prev, ...idCardTemplate }));
+  }, [idCardTemplate]);
+
+  const handleTemplateImageUpload = async (field, aspectField, file) => {
+    if (!file) return;
+    if (!isFileSizeAllowed(file.size)) {
+      Swal.fire({ icon: 'warning', title: 'File too large', text: `"${file.name}" is over the 10 MB limit.` });
+      return;
+    }
+    setTemplateUploading(field);
+    try {
+      const url = await uploadFile(file);
+      if (!url) {
+        Swal.fire({ icon: 'error', title: 'Upload failed', text: 'Could not upload the image.' });
+        return;
+      }
+      const update = { [field]: url };
+      if (aspectField) {
+        try {
+          const { width, height } = await readImageDimensions(file);
+          update[aspectField] = height > 0 ? width / height : null;
+        } catch {
+          update[aspectField] = null;
+        }
+      }
+      setTemplateForm(prev => ({ ...prev, ...update }));
+    } finally {
+      setTemplateUploading('');
+    }
+  };
+
+  const handleActivateTemplate = async () => {
+    try {
+      await saveIdCardTemplate(templateForm);
+      Swal.fire({ icon: 'success', title: 'Template activated', timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: 'Activation failed', text: err?.message || 'Could not save the template.', icon: 'error' });
+    }
+  };
 
   const handleSaveConfig = () => {
     saveConfig(config);
@@ -209,9 +294,10 @@ export default function SystemSettings() {
         <div className="section-header-row"><Settings size={18} /><h3>General</h3></div>
         <div className="settings-form">
           {[
-            ['organizationName', 'Organization Name', 'text'],
-            ['contactEmail',     'Contact Email',      'email'],
-            ['scholarshipCap',   'Scholarship Cap (₱)', 'number'],
+            ['organizationName',  'Organization Name',      'text'],
+            ['contactEmail',      'Contact Email',          'email'],
+            ['scholarshipCap',    'Scholarship Cap (₱)',    'number'],
+            ['numberOfSemesters', 'Number of Semesters',    'number'],
           ].map(([field, label, type]) => (
             <div className="form-group" key={field}>
               <label>{label}</label>
@@ -275,6 +361,94 @@ export default function SystemSettings() {
         </button>
         <button className="btn btn-secondary" onClick={loadSettings}>
           <RotateCcw size={16} /> Reload
+        </button>
+      </div>
+    </div>
+  );
+
+  /* ── ID card template tab ──────────────────────────────── */
+  const TEMPLATE_IMAGE_FIELDS = [
+    { field: 'frontBackgroundUrl', aspectField: 'frontAspectRatio', label: 'Front Background' },
+    { field: 'backBackgroundUrl',  aspectField: 'backAspectRatio',  label: 'Back Background' },
+    { field: 'mayorSignatureUrl',  aspectField: null, label: "Mayor's Signature" },
+    { field: 'primaryLogoUrl',     aspectField: null, label: 'Primary Logo' },
+    { field: 'secondaryLogoUrl',   aspectField: null, label: 'Secondary Logo' },
+  ];
+
+  const renderIdCardTemplateTab = () => (
+    <div className="settings-grid">
+      <section className="settings-section">
+        <div className="section-header-row"><CreditCard size={18} /><h3>ID Card Images</h3></div>
+        <div className="settings-form">
+          {TEMPLATE_IMAGE_FIELDS.map(({ field, aspectField, label }) => (
+            <div className="form-group" key={field}>
+              <label>{label}</label>
+              <input
+                type="file"
+                accept="image/*"
+                disabled={templateUploading === field}
+                onChange={e => handleTemplateImageUpload(field, aspectField, e.target.files[0])}
+              />
+              {templateUploading === field && (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Uploading…</span>
+              )}
+              {templateForm[field] && templateUploading !== field && (
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
+                  Current: {templateForm[field]}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <div className="section-header-row"><Settings size={18} /><h3>Mayor Details</h3></div>
+        <div className="settings-form">
+          <div className="form-group">
+            <label>Mayor's Name</label>
+            <input
+              type="text"
+              value={templateForm.mayorName}
+              onChange={e => setTemplateForm(prev => ({ ...prev, mayorName: e.target.value }))}
+              placeholder="Hon. Juan Dela Cruz"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <div className="section-header-row"><CreditCard size={18} /><h3>Preview</h3></div>
+        <div className="settings-form">
+          {!templateForm.frontBackgroundUrl && !templateForm.backBackgroundUrl ? (
+            <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+              Upload a front/back background above to preview it here.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+              {templateForm.frontBackgroundUrl && (
+                <div>
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Front</p>
+                  <img src={templateForm.frontBackgroundUrl} alt="ID card front background preview" style={{ maxWidth: 300 }} />
+                </div>
+              )}
+              {templateForm.backBackgroundUrl && (
+                <div>
+                  <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Back</p>
+                  <img src={templateForm.backBackgroundUrl} alt="ID card back background preview" style={{ maxWidth: 300 }} />
+                </div>
+              )}
+            </div>
+          )}
+          {templateForm.mayorName && (
+            <p style={{ marginTop: '0.75rem', marginBottom: 0 }}>Mayor: {templateForm.mayorName}</p>
+          )}
+        </div>
+      </section>
+
+      <div className="config-actions">
+        <button className="btn btn-primary" onClick={handleActivateTemplate}>
+          <Save size={16} /> Activate Template
         </button>
       </div>
     </div>
@@ -479,7 +653,8 @@ export default function SystemSettings() {
 
         <div className="tab-content-panel">
           {activeTab === 'config' && renderConfigTab()}
-          {activeTab !== 'config' && renderCollectionTab(activeTab)}
+          {activeTab === 'idCardTemplate' && renderIdCardTemplateTab()}
+          {activeTab !== 'config' && activeTab !== 'idCardTemplate' && renderCollectionTab(activeTab)}
         </div>
       </div>
 

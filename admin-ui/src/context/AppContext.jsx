@@ -565,6 +565,11 @@ export function AppProvider({ children }) {
   const [events, setEvents] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [systemSettings, setSystemSettings] = useState(parseSystemSettings);
+  // Scholar ID card template — the images/mayor-name the Flutter app renders
+  // onto a scholar's digital ID. A single Firestore doc (like `system_config/
+  // settings` above) so every admin device and the scholar app read the same
+  // active template.
+  const [idCardTemplate, setIdCardTemplate] = useState(null);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -1073,6 +1078,31 @@ export function AppProvider({ children }) {
     );
     return () => unsubscribe();
   }, [authReady]);
+
+  // Scholar ID card template — a single Firestore doc holding the front/back
+  // background images, the mayor's name/signature, and the two logo images the
+  // scholar app composites onto a scholar's digital ID card.
+  useEffect(() => {
+    if (!authReady) return;
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db) return;
+    const unsubscribe = onSnapshot(
+      doc(db, 'system_config', 'scholarIdCardTemplate'),
+      (snap) => setIdCardTemplate(snap.exists() ? snap.data() : null),
+      (error) => console.error('Firestore scholarIdCardTemplate listener error:', error)
+    );
+    return () => unsubscribe();
+  }, [authReady]);
+
+  const saveIdCardTemplate = async (templateData) => {
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db) return;
+    await setDoc(
+      doc(db, 'system_config', 'scholarIdCardTemplate'),
+      { ...templateData, isActive: true, updatedAt: Date.now(), updatedBy: 'Admin' },
+      { merge: true }
+    );
+  };
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -2556,6 +2586,8 @@ export function AppProvider({ children }) {
     systemSettings,
     updateSystemSettings,
     resetSystemSettings,
+    idCardTemplate,
+    saveIdCardTemplate,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
