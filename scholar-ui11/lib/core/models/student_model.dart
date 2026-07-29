@@ -47,6 +47,27 @@ class StudentModel {
   // Set once the approval celebration screen has played for this account, so
   // it never replays (any device — this travels with the Firestore doc).
   final bool celebrationSeen;
+  // Admin's manual confirmation that the scholar is enrolled for the term —
+  // set via the admin-ui Scholars page. 'Verified' unlocks Add COG/COR/Subject.
+  final String? enrollmentStatus;
+  // Firebase Auth uid — set once the account has been migrated/activated to
+  // the Firebase-Auth-based login flow. Null for legacy accounts still on
+  // plaintext-password login.
+  final String? uid;
+  // True when the scholar must change their (admin-assigned) password on
+  // next login — cleared once they set their own password.
+  final bool mustChangePassword;
+  // When the scholar's Firebase Auth account was created/activated.
+  final DateTime? activatedAt;
+  // Timestamp of the scholar's most recent successful login.
+  final DateTime? lastLogin;
+  // When the scholar last changed their own password.
+  final DateTime? passwordChangedAt;
+  // Total number of semesters the scholarship grant covers, as set by the
+  // admin at import time.
+  final int? totalScholarshipSemesters;
+  // School year the scholarship grant was awarded for (e.g. '2024-2025').
+  final String? grantSchoolYear;
 
   StudentModel({
     String? id,
@@ -63,7 +84,7 @@ class StudentModel {
     required this.dateOfBirth,
     required this.contactNumber,
     required this.email,
-    required this.password,
+    this.password = '',
     required this.schoolName,
     required this.yearLevel,
     required this.academicProgram,
@@ -82,6 +103,14 @@ class StudentModel {
     this.economicScore,
     this.examScore,
     this.celebrationSeen = false,
+    this.enrollmentStatus,
+    this.uid,
+    this.mustChangePassword = false,
+    this.activatedAt,
+    this.lastLogin,
+    this.passwordChangedAt,
+    this.totalScholarshipSemesters,
+    this.grantSchoolYear,
   }) : scholarshipStatus =
            scholarshipStatus ??
            (studentType == StudentType.scholar ? 'Active' : 'Pending'),
@@ -142,6 +171,9 @@ class StudentModel {
 
   bool get isStAugustine => schoolName == 'St. Augustine Seminary';
 
+  /// True once the admin has confirmed the scholar's enrollment for the term.
+  bool get isEnrolled => enrollmentStatus == 'Verified';
+
   /// Check if student is a scholar (already approved)
   bool get isScholar => studentType == StudentType.scholar;
 
@@ -194,6 +226,14 @@ class StudentModel {
     int? economicScore,
     double? examScore,
     bool? celebrationSeen,
+    String? enrollmentStatus,
+    String? uid,
+    bool? mustChangePassword,
+    DateTime? activatedAt,
+    DateTime? lastLogin,
+    DateTime? passwordChangedAt,
+    int? totalScholarshipSemesters,
+    String? grantSchoolYear,
   }) {
     return StudentModel(
       id: id ?? this.id,
@@ -228,6 +268,15 @@ class StudentModel {
       economicScore: economicScore ?? this.economicScore,
       examScore: examScore ?? this.examScore,
       celebrationSeen: celebrationSeen ?? this.celebrationSeen,
+      enrollmentStatus: enrollmentStatus ?? this.enrollmentStatus,
+      uid: uid ?? this.uid,
+      mustChangePassword: mustChangePassword ?? this.mustChangePassword,
+      activatedAt: activatedAt ?? this.activatedAt,
+      lastLogin: lastLogin ?? this.lastLogin,
+      passwordChangedAt: passwordChangedAt ?? this.passwordChangedAt,
+      totalScholarshipSemesters:
+          totalScholarshipSemesters ?? this.totalScholarshipSemesters,
+      grantSchoolYear: grantSchoolYear ?? this.grantSchoolYear,
     );
   }
 
@@ -265,6 +314,14 @@ class StudentModel {
       'economicScore': economicScore,
       'examScore': examScore,
       'celebrationSeen': celebrationSeen,
+      'enrollmentStatus': enrollmentStatus,
+      'uid': uid,
+      'mustChangePassword': mustChangePassword,
+      'activatedAt': activatedAt?.toIso8601String(),
+      'lastLogin': lastLogin?.toIso8601String(),
+      'passwordChangedAt': passwordChangedAt?.toIso8601String(),
+      'totalScholarshipSemesters': totalScholarshipSemesters,
+      'grantSchoolYear': grantSchoolYear,
     };
   }
 
@@ -314,6 +371,20 @@ class StudentModel {
       economicScore: (json['economicScore'] as num?)?.toInt(),
       examScore: (json['examScore'] as num?)?.toDouble(),
       celebrationSeen: json['celebrationSeen'] == true,
+      enrollmentStatus: json['enrollmentStatus']?.toString(),
+      uid: json['uid']?.toString(),
+      mustChangePassword: json['mustChangePassword'] == true,
+      activatedAt: json['activatedAt'] == null
+          ? null
+          : parseDate(json['activatedAt']),
+      lastLogin:
+          json['lastLogin'] == null ? null : parseDate(json['lastLogin']),
+      passwordChangedAt: json['passwordChangedAt'] == null
+          ? null
+          : parseDate(json['passwordChangedAt']),
+      totalScholarshipSemesters:
+          (json['totalScholarshipSemesters'] as num?)?.toInt(),
+      grantSchoolYear: json['grantSchoolYear']?.toString(),
     );
   }
 }

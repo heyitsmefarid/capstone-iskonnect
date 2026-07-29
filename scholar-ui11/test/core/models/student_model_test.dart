@@ -73,4 +73,45 @@ void main() {
       expect(restored.celebrationSeen, isTrue);
     });
   });
+
+  group('account-activation fields', () {
+    test('fromJson defaults new activation fields when absent (legacy doc)', () {
+      final json = {
+        'firstName': 'Ana', 'lastName': 'Cruz', 'email': 'a@example.com',
+        'street': 'Rizal St', 'barangay': 'Poblacion', 'city': 'Calapan',
+        'province': 'Oriental Mindoro', 'gender': 'Female',
+      };
+      final model = StudentModel.fromJson(json);
+      expect(model.uid, isNull);
+      expect(model.mustChangePassword, isFalse);
+      expect(model.password, isEmpty);
+    });
+
+    test('fromJson reads the new activation fields when present', () {
+      final json = {
+        'firstName': 'Ana', 'lastName': 'Cruz', 'email': 'a@example.com',
+        'street': 'Rizal St', 'barangay': 'Poblacion', 'city': 'Calapan',
+        'province': 'Oriental Mindoro', 'gender': 'Female',
+        'uid': 'abc123', 'mustChangePassword': true,
+        'totalScholarshipSemesters': 8, 'grantSchoolYear': '2024-2025',
+      };
+      final model = StudentModel.fromJson(json);
+      expect(model.uid, 'abc123');
+      expect(model.mustChangePassword, isTrue);
+      expect(model.totalScholarshipSemesters, 8);
+      expect(model.grantSchoolYear, '2024-2025');
+    });
+
+    test('StudentModel can be constructed without a password (new Firebase-Auth flow)', () {
+      final model = StudentModel(
+        firstName: 'Ana', middleName: '', lastName: 'Cruz',
+        street: 'Rizal St', barangay: 'Poblacion', city: 'Calapan',
+        province: 'Oriental Mindoro', gender: 'Female', dateOfBirth: DateTime(2002, 5, 10),
+        contactNumber: '09171234567', email: 'a@example.com',
+        schoolName: 'MinSU', yearLevel: '2', academicProgram: 'BSIT',
+        academicYear: '2025-2026', semester: '1st Semester',
+      );
+      expect(model.password, isEmpty);
+    });
+  });
 }
