@@ -6,6 +6,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAnonymous() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
     function hasRole(role) {
       return signedIn() && request.auth.token.role == role;
     }
@@ -39,12 +43,21 @@ service cloud.firestore {
     }
 
     // ── Users ──────────────────────────────────────────────
+    // The admin panel signs in anonymously and has no custom claims, so it must
+    // remain fully unrestricted here (isAnonymous()) — unchanged behavior.
+    // Real sessions (scholars/applicants, now on real email/password sign-in)
+    // are restricted to their own doc (matched by uid) and a narrow field
+    // allowlist on update.
     match /users/{userId} {
-      allow read: if signedIn(); // Any authenticated session (incl. admin anonymous auth) can read
-      // The scholar app uses an app-generated document id (not the auth uid) and
-      // signs in anonymously, so any signed-in session may create/update its record.
-      allow create, update: if signedIn();
-      allow delete: if isAdmin();
+      allow read: if isAnonymous() || resource.data.uid == request.auth.uid;
+      allow create: if isAnonymous() || request.resource.data.uid == request.auth.uid;
+      allow update: if isAnonymous()
+                 || (resource.data.uid == request.auth.uid
+                     && request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['mustChangePassword','passwordChangedAt','activatedAt','lastLogin',
+                                    'houseNo','street','barangay','city','province','gender','contactNumber',
+                                    'profilePicture','celebrationSeen']));
+      allow delete: if isAnonymous();
     }
 
     match /profiles/{userId} {
@@ -113,6 +126,14 @@ service cloud.firestore {
       allow read: if signedIn();
       // Admin UI uses anonymous auth in this build, so allow any signed-in
       // session to manage announcements.
+      allow create, update, delete: if signedIn();
+    }
+
+    // ── Events ──────────────────────────────────────────────
+    // Admin UI schedules events (anonymous auth in this build); the scholar
+    // app and the QR scanner both read the same collection.
+    match /events/{eventId} {
+      allow read: if signedIn();
       allow create, update, delete: if signedIn();
     }
 
