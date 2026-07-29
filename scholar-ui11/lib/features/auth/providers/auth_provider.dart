@@ -473,13 +473,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // ORIGINAL doc id and only gain a `uid` field, so fall back to a
       // `uid`-field query when the direct lookup misses — this is required
       // for existing scholars to be able to log in at all.
-      DocumentSnapshot<Map<String, dynamic>>? doc =
-          await _studentsCollection?.doc(uid).get();
+      DocumentSnapshot<Map<String, dynamic>>? doc = await _studentsCollection
+          ?.doc(uid)
+          .get()
+          .timeout(_firestoreTimeout);
       if (doc == null || !doc.exists || doc.data()?['uid'] != uid) {
         final query = await _studentsCollection
             ?.where('uid', isEqualTo: uid)
             .limit(1)
-            .get();
+            .get()
+            .timeout(_firestoreTimeout);
         doc = (query != null && query.docs.isNotEmpty) ? query.docs.first : null;
       }
 
@@ -499,7 +502,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
         return false;
       }
 
-      final student = _normalizeStudentStatus(StudentModel.fromJson(data));
+      // Anchor to the ACTUAL Firestore document id, not the `id` field
+      // inside the JSON payload — StudentModel.fromJson fabricates a random
+      // UUID when `id` is missing/malformed. For the legacy fallback path
+      // above (found via the `uid`-field query, where doc.id is the
+      // scholar's original pre-migration id, not their uid) trusting a
+      // wrong/missing `id` field would key _listenToStudentDoc and
+      // _registeredStudents to a document that doesn't exist, bouncing the
+      // scholar back to the login screen immediately after a successful
+      // sign-in.
+      final student = _normalizeStudentStatus(
+        StudentModel.fromJson(data).copyWith(id: doc.id),
+      );
       _registeredStudents[student.id] = student;
       await _saveStudentsToStorage();
 
@@ -537,6 +551,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = state.copyWith(isLoading: false, error: message);
       return false;
     } catch (e) {
+      // Any failure AFTER a successful signInWithEmailAndPassword (a
+      // Firestore read/timeout, a malformed doc failing to parse, etc.)
+      // must not leave a half-authenticated Auth session dangling while the
+      // app reports isLoggedIn: false — sign it back out before surfacing
+      // the error, same as the "account not found"/"removed" branches above.
+      if (FirebaseAuth.instance.currentUser != null) {
+        try {
+          await FirebaseAuth.instance.signOut();
+        } catch (_) {
+          // Best-effort — don't let a signOut failure mask the real error.
+        }
+      }
       state = state.copyWith(
         isLoading: false,
         error: 'An unexpected error occurred. Please try again later.',
