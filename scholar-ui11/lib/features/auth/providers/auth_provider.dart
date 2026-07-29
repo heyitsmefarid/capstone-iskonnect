@@ -729,6 +729,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? academicProgram,
     String? yearLevel,
     String? academicYear,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
   }) {
     if (state.student == null) return;
 
@@ -753,6 +755,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         academicProgram: academicProgram,
         yearLevel: yearLevel,
         academicYear: academicYear,
+        emergencyContactName: emergencyContactName,
+        emergencyContactPhone: emergencyContactPhone,
       ),
     );
 

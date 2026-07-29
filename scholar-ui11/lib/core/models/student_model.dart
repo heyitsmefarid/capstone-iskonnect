@@ -68,6 +68,9 @@ class StudentModel {
   final int? totalScholarshipSemesters;
   // School year the scholarship grant was awarded for (e.g. '2024-2025').
   final String? grantSchoolYear;
+  // Emergency contact name and phone number.
+  final String? emergencyContactName;
+  final String? emergencyContactPhone;
 
   StudentModel({
     String? id,
@@ -111,6 +114,8 @@ class StudentModel {
     this.passwordChangedAt,
     this.totalScholarshipSemesters,
     this.grantSchoolYear,
+    this.emergencyContactName,
+    this.emergencyContactPhone,
   }) : scholarshipStatus =
            scholarshipStatus ??
            (studentType == StudentType.scholar ? 'Active' : 'Pending'),
@@ -234,6 +239,8 @@ class StudentModel {
     DateTime? passwordChangedAt,
     int? totalScholarshipSemesters,
     String? grantSchoolYear,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
   }) {
     return StudentModel(
       id: id ?? this.id,
@@ -277,6 +284,8 @@ class StudentModel {
       totalScholarshipSemesters:
           totalScholarshipSemesters ?? this.totalScholarshipSemesters,
       grantSchoolYear: grantSchoolYear ?? this.grantSchoolYear,
+      emergencyContactName: emergencyContactName ?? this.emergencyContactName,
+      emergencyContactPhone: emergencyContactPhone ?? this.emergencyContactPhone,
     );
   }
 
@@ -322,6 +331,8 @@ class StudentModel {
       'passwordChangedAt': passwordChangedAt?.toIso8601String(),
       'totalScholarshipSemesters': totalScholarshipSemesters,
       'grantSchoolYear': grantSchoolYear,
+      'emergencyContactName': emergencyContactName,
+      'emergencyContactPhone': emergencyContactPhone,
     };
   }
 
@@ -385,6 +396,8 @@ class StudentModel {
       totalScholarshipSemesters:
           (json['totalScholarshipSemesters'] as num?)?.toInt(),
       grantSchoolYear: json['grantSchoolYear']?.toString(),
+      emergencyContactName: json['emergencyContactName']?.toString(),
+      emergencyContactPhone: json['emergencyContactPhone']?.toString(),
     );
   }
 }

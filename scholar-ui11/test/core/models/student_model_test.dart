@@ -114,4 +114,43 @@ void main() {
       expect(model.password, isEmpty);
     });
   });
+
+  group('emergency contact fields', () {
+    test('fromJson reads emergencyContactName/Phone when present', () {
+      final json = {
+        'firstName': 'Ana', 'lastName': 'Cruz', 'email': 'a@example.com',
+        'street': 'Rizal St', 'barangay': 'Poblacion', 'city': 'Calapan',
+        'province': 'Oriental Mindoro', 'gender': 'Female',
+        'emergencyContactName': 'Juana Cruz', 'emergencyContactPhone': '0912-345-6789',
+      };
+      final model = StudentModel.fromJson(json);
+      expect(model.emergencyContactName, 'Juana Cruz');
+      expect(model.emergencyContactPhone, '0912-345-6789');
+    });
+
+    test('fromJson defaults emergencyContactName/Phone to null when absent', () {
+      final json = {
+        'firstName': 'Ana', 'lastName': 'Cruz', 'email': 'a@example.com',
+        'street': 'Rizal St', 'barangay': 'Poblacion', 'city': 'Calapan',
+        'province': 'Oriental Mindoro', 'gender': 'Female',
+      };
+      final model = StudentModel.fromJson(json);
+      expect(model.emergencyContactName, isNull);
+      expect(model.emergencyContactPhone, isNull);
+    });
+
+    test('copyWith updates emergencyContactName/Phone', () {
+      final model = StudentModel(
+        firstName: 'Ana', middleName: '', lastName: 'Cruz',
+        street: 'Rizal St', barangay: 'Poblacion', city: 'Calapan',
+        province: 'Oriental Mindoro', gender: 'Female', dateOfBirth: DateTime(2002, 5, 10),
+        contactNumber: '09171234567', email: 'a@example.com',
+        schoolName: 'MinSU', yearLevel: '2', academicProgram: 'BSIT',
+        academicYear: '2025-2026', semester: '1st Semester',
+      );
+      final updated = model.copyWith(emergencyContactName: 'Juana Cruz', emergencyContactPhone: '0912-345-6789');
+      expect(updated.emergencyContactName, 'Juana Cruz');
+      expect(updated.emergencyContactPhone, '0912-345-6789');
+    });
+  });
 }
