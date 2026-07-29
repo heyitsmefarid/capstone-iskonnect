@@ -152,12 +152,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<StudentModel?> _findStudentByEmailFromFirestore(String email) async {
+  /// Looks up [email] in Firestore. `reachedServer` tells the caller whether
+  /// the query actually completed (so it can tell "account doesn't exist"
+  /// apart from "couldn't check" and only fall back to a local cache in the
+  /// latter case — see [login]).
+  Future<({bool reachedServer, StudentModel? student})> _findStudentByEmailFromFirestore(
+    String email,
+  ) async {
     await _ensureAnonymousAuth();
     final collection = _studentsCollection;
     if (collection == null) {
       state = state.copyWith(error: 'Firebase not configured. Cannot look up account.');
-      return null;
+      return (reachedServer: false, student: null);
     }
 
     // Try up to 2 times — first attempt may hit a cold auth state.
@@ -181,16 +187,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
             }
           }
           if (activeData != null) {
-            return _normalizeStudentStatus(StudentModel.fromJson(activeData));
+            return (
+              reachedServer: true,
+              student: _normalizeStudentStatus(StudentModel.fromJson(activeData)),
+            );
           }
           // Every matching document is removed/archived.
           state = state.copyWith(
             isLoading: false,
             error: 'This account is no longer active. Please contact the City Education Department.',
           );
-          return null;
+          return (reachedServer: true, student: null);
         }
-        return null; // Query succeeded but no matching document.
+        return (reachedServer: true, student: null); // Query succeeded but no matching document.
       } catch (e) {
         if (attempt == 0) {
           // Wait and re-auth before retry.
@@ -202,11 +211,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
             isLoading: false,
             error: 'Could not reach server: ${e.toString().substring(0, e.toString().length.clamp(0, 80))}',
           );
-          return null;
+          return (reachedServer: false, student: null);
         }
       }
     }
-    return null;
+    return (reachedServer: false, student: null);
   }
 
   static StudentModel _normalizeStudentStatus(StudentModel student) {
@@ -435,56 +444,98 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await Future.delayed(const Duration(milliseconds: 1000));
 
     try {
-      // Find student by email
-      final studentQuery = _registeredStudents.values.where(
-        (s) => s.email.toLowerCase() == email.toLowerCase(),
+      // Real Firebase Auth sign-in — replaces the old anonymous-auth +
+      // Firestore-email-query + plaintext-password-compare flow. Firebase
+      // Auth itself is now the source of truth for credential checking.
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email.toLowerCase(),
+        password: password,
       );
 
-      StudentModel? student;
-      if (studentQuery.isNotEmpty) {
-        student = studentQuery.first;
-      } else {
-        student = await _findStudentByEmailFromFirestore(email.toLowerCase());
-        if (student != null) {
-          _registeredStudents[student.id] = student;
-          await _saveStudentsToStorage();
-        }
-      }
-
-      if (student == null) {
-        // Preserve a specific reason set during lookup (e.g. the account was
-        // removed/archived by the admin, or the server was unreachable) instead
-        // of masking it with the generic "no account found" message.
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        // Should not happen after a successful sign-in, but guard anyway
+        // rather than proceeding with no way to look up the scholar doc.
         state = state.copyWith(
           isLoading: false,
-          error: state.error ??
-              'No account found with this email address. Please check your email or register a new account.',
+          error: 'An unexpected error occurred. Please try again later.',
         );
         return false;
       }
 
-      // Check password
-      if (student.password != password) {
+      // Look up the scholar's Firestore doc by uid. Per this plan's global
+      // constraint ("doc id and Firebase Auth uid are equal for every
+      // account created from now on, but legacy scholars keep their
+      // existing doc id — always compare identity via the uid field, never
+      // doc.id"), a direct doc(uid) lookup alone only covers accounts
+      // created from now on (bulkCreateScholars sets doc.id == uid). Legacy
+      // scholars migrated by migrateLegacyPasswordsToAuth.js keep their
+      // ORIGINAL doc id and only gain a `uid` field, so fall back to a
+      // `uid`-field query when the direct lookup misses — this is required
+      // for existing scholars to be able to log in at all.
+      DocumentSnapshot<Map<String, dynamic>>? doc =
+          await _studentsCollection?.doc(uid).get();
+      if (doc == null || !doc.exists || doc.data()?['uid'] != uid) {
+        final query = await _studentsCollection
+            ?.where('uid', isEqualTo: uid)
+            .limit(1)
+            .get();
+        doc = (query != null && query.docs.isNotEmpty) ? query.docs.first : null;
+      }
+
+      final data = doc?.data();
+      if (doc == null || !doc.exists || data == null) {
+        await FirebaseAuth.instance.signOut();
+        state = state.copyWith(isLoading: false, error: 'Account not found.');
+        return false;
+      }
+
+      if (_isRemovedData(data)) {
+        await FirebaseAuth.instance.signOut();
         state = state.copyWith(
           isLoading: false,
-          error: 'Incorrect password. Please try again.',
+          error: 'This account is no longer active.',
         );
         return false;
       }
+
+      final student = _normalizeStudentStatus(StudentModel.fromJson(data));
+      _registeredStudents[student.id] = student;
+      await _saveStudentsToStorage();
+
+      // Save login state to persistent storage
+      await _saveLoggedInUser(student.id);
+      _listenToStudentDoc(student.id);
 
       state = state.copyWith(
         isLoggedIn: true,
         isLoading: false,
         student: student,
+        error: null,
       );
 
-      // Save login state to persistent storage
-      await _saveLoggedInUser(student.id);
-
-      await _saveStudentToFirestoreSafely(student);
-      _listenToStudentDoc(student.id);
-
       return true;
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'wrong-password':
+        case 'invalid-credential':
+          message = 'Incorrect email or password.';
+          break;
+        case 'user-not-found':
+          message = 'No account found with that email.';
+          break;
+        case 'user-disabled':
+          message = 'This account has been disabled.';
+          break;
+        case 'too-many-requests':
+          message = 'Too many attempts. Try again later.';
+          break;
+        default:
+          message = 'Unable to sign in. Please try again.';
+      }
+      state = state.copyWith(isLoading: false, error: message);
+      return false;
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -507,7 +558,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         break;
       }
     }
-    student ??= await _findStudentByEmailFromFirestore(normalized);
+    student ??= (await _findStudentByEmailFromFirestore(normalized)).student;
     if (student == null) return false;
 
     final updated = student.copyWith(password: newPassword);
