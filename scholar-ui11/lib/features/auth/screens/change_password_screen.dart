@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
+import 'package:go_router/go_router.dart';
 
 class ChangePasswordScreen extends ConsumerStatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -17,6 +17,14 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   final _confirmController = TextEditingController();
   bool _isSubmitting = false;
   String? _error;
+
+  @override
+  void dispose() {
+    _currentController.dispose();
+    _newController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -35,11 +43,24 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
         'activatedAt': FieldValue.serverTimestamp(),
         'passwordChangedAt': FieldValue.serverTimestamp(),
       });
-      ref.invalidate(authStateProvider);
+      // Navigate explicitly rather than ref.invalidate(authStateProvider):
+      // appRouterProvider does `ref.watch(_authStatusProvider)`, and
+      // AuthNotifier's constructor resets to isInitialized:false the instant
+      // it's recreated, so invalidating mid-session forces a brand-new
+      // GoRouter (main.dart's MaterialApp.router swaps to the new instance),
+      // which resets navigation to '/splash' and only reaches '/dashboard'
+      // after SplashScreen's hardcoded 2.5s delay. context.go here matches
+      // the same pattern login_screen.dart already uses after a successful
+      // auth action, and the redirect callback re-evaluates against the
+      // already-live Firestore listener (_listenToStudentDoc, wired up at
+      // login) that picks up this doc's update in the background.
+      if (mounted) context.go('/dashboard');
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.code == 'invalid-credential' || e.code == 'wrong-password'
           ? 'Current password is incorrect.'
           : 'Could not update password: ${e.message}');
+    } catch (e) {
+      setState(() => _error = 'Something went wrong updating your account. Please try again.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
