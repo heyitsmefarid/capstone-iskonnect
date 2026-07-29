@@ -376,22 +376,40 @@ class AuthNotifier extends StateNotifier<AuthState> {
       // Simulate network delay
       await Future.delayed(const Duration(milliseconds: 1500));
 
-      // Check if email already exists (case-insensitive)
-      if (_registeredStudents.values.any(
-        (s) => s.email.toLowerCase() == normalizedEmail,
-      )) {
+      // Create the real Firebase Auth account for this applicant — replaces
+      // the old plaintext-password-in-Firestore flow. Firebase Auth is now
+      // the source of truth for credentials (and the authoritative
+      // duplicate-email check: it throws 'email-already-in-use' below).
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: normalizedEmail,
+            password: normalizedStudent.password,
+          );
+      final uid = credential.user?.uid;
+      if (uid == null) {
+        // Should not happen after a successful account creation, but guard
+        // anyway rather than proceeding with no uid to key the doc on.
         state = state.copyWith(
           isLoading: false,
-          error:
-              'This email address is already registered. Please use a different email or try logging in.',
+          error: 'An unexpected error occurred. Please try again later.',
         );
         return false;
       }
 
-      // Store the student
-  final storedStudent = _normalizeStudentStatus(normalizedStudent);
-  _registeredStudents[storedStudent.id] = storedStudent;
-  _pendingRegistration = storedStudent;
+      // Doc id == Auth uid for every account created from now on (mirrors
+      // the lookup contract `login()` relies on). The applicant chose this
+      // password themselves, so no forced change is needed on next login —
+      // and the plaintext password is dropped rather than persisted.
+      final storedStudent = _normalizeStudentStatus(
+        normalizedStudent.copyWith(
+          id: uid,
+          uid: uid,
+          mustChangePassword: false,
+          password: '',
+        ),
+      );
+      _registeredStudents[storedStudent.id] = storedStudent;
+      _pendingRegistration = storedStudent;
 
       // Save to persistent storage
       await _saveStudentsToStorage();
@@ -399,6 +417,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       state = state.copyWith(isLoading: false);
       return true;
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'email-already-in-use':
+          message =
+              'This email address is already registered. Please use a different email or try logging in.';
+          break;
+        case 'weak-password':
+          message = 'Password is too weak. Please choose a stronger password.';
+          break;
+        case 'invalid-email':
+          message = 'Please enter a valid email address.';
+          break;
+        default:
+          message =
+              'Registration failed. Please check your information and try again.';
+      }
+      state = state.copyWith(isLoading: false, error: message);
+      return false;
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
