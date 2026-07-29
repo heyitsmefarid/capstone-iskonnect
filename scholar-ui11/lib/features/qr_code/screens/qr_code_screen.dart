@@ -12,6 +12,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:iskonnectttt/core/models/student_model.dart';
 import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
+import 'package:iskonnectttt/features/qr_code/providers/id_card_template_provider.dart';
+import 'package:iskonnectttt/features/qr_code/widgets/id_card_back.dart';
+import 'package:iskonnectttt/features/qr_code/widgets/id_card_front.dart';
 import 'package:iskonnectttt/shared/utils/qr_download_stub.dart'
     if (dart.library.html) 'package:iskonnectttt/shared/utils/qr_download_web.dart';
 
@@ -197,9 +200,31 @@ class _QRCodeScreenState extends ConsumerState<QRCodeScreen> {
 
               // Scholarship ID card — this exact widget is what gets exported
               // as the downloaded image (photo, name, school, program, QR).
-              RepaintBoundary(
-                key: _idCardKey,
-                child: _ScholarshipIdCard(student: student),
+              // Renders the admin-configured templated card (tap to flip
+              // front/back) once a template is active, otherwise falls back
+              // to the plain hardcoded card so the screen never breaks.
+              Consumer(
+                builder: (context, ref, _) {
+                  final templateAsync = ref.watch(idCardTemplateProvider);
+                  return templateAsync.when(
+                    data: (template) {
+                      if (template == null || template.frontBackgroundUrl == null) {
+                        // No active template yet — fall back to the plain old card so the
+                        // screen never breaks for a scholar before the admin sets one up.
+                        return RepaintBoundary(key: _idCardKey, child: _ScholarshipIdCard(student: student));
+                      }
+                      return RepaintBoundary(
+                        key: _idCardKey,
+                        child: _FlippableIdCard(
+                          front: IdCardFront(student: student, template: template),
+                          back: IdCardBack(template: template),
+                        ),
+                      );
+                    },
+                    loading: () => const AspectRatio(aspectRatio: 1.6, child: Center(child: CircularProgressIndicator())),
+                    error: (_, __) => RepaintBoundary(key: _idCardKey, child: _ScholarshipIdCard(student: student)),
+                  );
+                },
               ),
               const SizedBox(height: 16),
 
@@ -543,6 +568,61 @@ class _ModernInstructionItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Wraps [IdCardFront]/[IdCardBack] with a tap-triggered 3D Y-axis flip.
+class _FlippableIdCard extends StatefulWidget {
+  final Widget front;
+  final Widget back;
+
+  const _FlippableIdCard({required this.front, required this.back});
+
+  @override
+  State<_FlippableIdCard> createState() => _FlippableIdCardState();
+}
+
+class _FlippableIdCardState extends State<_FlippableIdCard> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 400),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _flip() {
+    if (_controller.isAnimating) return;
+    if (_controller.value == 0) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _flip,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final angle = _controller.value * 3.14159; // 0 to pi radians
+          final showFront = angle <= 3.14159 / 2;
+          final displayAngle = showFront ? angle : angle - 3.14159;
+          return Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.001) // perspective
+              ..rotateY(displayAngle),
+            child: showFront ? widget.front : widget.back,
+          );
+        },
+      ),
     );
   }
 }
