@@ -262,12 +262,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 builder: (context, state) =>
                     const AddGradeScreen(corOnly: true),
               ),
-              GoRoute(
-                path: 'add-cog',
-                name: 'add-cog',
-                builder: (context, state) =>
-                    const AddGradeScreen(cogOnly: true),
-              ),
             ],
           ),
           GoRoute(
