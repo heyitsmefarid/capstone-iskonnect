@@ -119,8 +119,22 @@ existing nav better):
   the browser's `Image` object) before/alongside the Cloudinary upload.
 - A preview of the current (saved but not-yet-active, or currently active)
   template.
-- An "Activate" action that writes the doc above via `updateSystemConfig`
-  (extending, not replacing, that existing endpoint/wrapper).
+- An "Activate" action that writes the doc above.
+
+**Correction found while planning (2026-07-29):** `updateSystemConfig`/
+`getSystemSettings` (`backend/functions/src/http/systemSettings.js`) are
+gated by `authenticateRequest` — a real Firebase ID token — which the admin
+panel's anonymous session can never provide (the same gap already found and
+worked around for `resetUserPassword`/`deactivateUser` in the scholar-import
+plan). This is exactly why `SystemSettings.jsx` doesn't call them today and
+uses local storage instead. **Do not route through these endpoints.**
+Instead, write directly to Firestore from the admin client — confirmed via
+`firestore.rules:206-210`, `/system_config/{docId}` already allows
+`allow read, write: if signedIn();`, the identical pattern already used
+(and already working in production) for the schools/programs catalog
+(`AppContext.jsx`'s `addCatalogItem`/`updateCatalogItem`, also direct
+client-side Firestore writes, not a Cloud Function). No new/extended Cloud
+Function is needed for this feature at all.
 
 ## 7. Scholar app — the card
 
@@ -156,11 +170,13 @@ write, matching how other profile-field edits already work).
 
 ## Phasing (for the implementation plan)
 
-1. Backend/schema: extend `updateSystemConfig`/`getSystemSettings` usage
-   for the new template doc shape (no new Cloud Function needed — the
-   generic endpoints already handle arbitrary config keys); add the two
-   new scholar fields to the existing profile-edit write path.
-2. Admin UI: the new template management page/tab.
+1. Schema: no new Cloud Function needed (see §6 correction) — just add the
+   two new scholar fields to the existing profile-edit write path
+   (`AppContext.jsx`'s `mapStudentToApplicant`/`buildUserDocFromApplicant`,
+   same lesson as the scholar-import plan's Task 8: a field is invisible to
+   the admin UI until it's threaded through that mapping layer).
+2. Admin UI: the new template management page/tab, writing directly to
+   `system_config/scholarIdCardTemplate` via the client Firestore SDK.
 3. Flutter: `StudentModel` additions (2 new fields) → template-fetch
    provider → the flip-card widget itself (front, then back, then the flip
    animation) → the emergency-contact input affordance.
