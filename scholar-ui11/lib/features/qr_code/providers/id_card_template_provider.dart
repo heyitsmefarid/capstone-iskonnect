@@ -2,9 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iskonnectttt/features/qr_code/models/id_card_template_model.dart';
 
-/// Fetched once per screen visit (not a live stream) — the template changes
-/// rarely, and a scholar can just re-open the ID card screen to see an update.
-final idCardTemplateProvider = FutureProvider<IdCardTemplateModel?>((ref) async {
+/// Fetched fresh each time something is actually watching it (not a live
+/// stream) — `autoDispose` drops the cached value once the QR screen
+/// unmounts, so re-opening the screen re-fetches instead of showing a
+/// value cached for the app's whole lifetime. The template changes rarely,
+/// so this is not a live stream while the screen stays open.
+final idCardTemplateProvider = FutureProvider.autoDispose<IdCardTemplateModel?>((ref) async {
   try {
     final doc = await FirebaseFirestore.instance
         .collection('system_config')

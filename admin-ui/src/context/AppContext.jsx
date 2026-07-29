@@ -1104,6 +1104,19 @@ export function AppProvider({ children }) {
     );
   };
 
+  // Rolls back to the plain, template-less fallback card for every scholar
+  // without touching the saved images/mayor details, so an admin who activated
+  // a broken/wrong template can undo it without re-uploading anything.
+  const deactivateIdCardTemplate = async () => {
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db) return;
+    await setDoc(
+      doc(db, 'system_config', 'scholarIdCardTemplate'),
+      { isActive: false, updatedAt: Date.now(), updatedBy: 'Admin' },
+      { merge: true }
+    );
+  };
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
@@ -2588,6 +2601,7 @@ export function AppProvider({ children }) {
     resetSystemSettings,
     idCardTemplate,
     saveIdCardTemplate,
+    deactivateIdCardTemplate,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

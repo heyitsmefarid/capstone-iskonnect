@@ -57,7 +57,7 @@ export default function SystemSettings() {
     updateSystemSettings,
     catalogSchools, catalogPrograms,
     addCatalogItem, updateCatalogItem, deleteCatalogItem, resetCatalogToDefaults,
-    idCardTemplate, saveIdCardTemplate,
+    idCardTemplate, saveIdCardTemplate, deactivateIdCardTemplate,
   } = useApp();
   const [activeTab, setActiveTab] = useState('config');
 
@@ -158,6 +158,24 @@ export default function SystemSettings() {
       Swal.fire({ icon: 'success', title: 'Template activated', timer: 1500, showConfirmButton: false });
     } catch (err) {
       Swal.fire({ title: 'Activation failed', text: err?.message || 'Could not save the template.', icon: 'error' });
+    }
+  };
+
+  const handleDeactivateTemplate = async () => {
+    const result = await Swal.fire({
+      title: 'Deactivate ID card template?',
+      text: 'Every scholar will immediately fall back to the plain, template-less ID card until a template is activated again.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: 'var(--danger)',
+      confirmButtonText: 'Yes, Deactivate',
+    });
+    if (!result.isConfirmed) return;
+    try {
+      await deactivateIdCardTemplate();
+      Swal.fire({ icon: 'success', title: 'Template deactivated', timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: 'Deactivation failed', text: err?.message || 'Could not deactivate the template.', icon: 'error' });
     }
   };
 
@@ -450,6 +468,11 @@ export default function SystemSettings() {
         <button className="btn btn-primary" onClick={handleActivateTemplate}>
           <Save size={16} /> Activate Template
         </button>
+        {idCardTemplate?.isActive && (
+          <button className="btn btn-danger" onClick={handleDeactivateTemplate}>
+            <Trash2 size={16} /> Deactivate Template
+          </button>
+        )}
       </div>
     </div>
   );

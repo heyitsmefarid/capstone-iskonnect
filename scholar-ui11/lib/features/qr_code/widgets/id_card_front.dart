@@ -30,10 +30,20 @@ class IdCardFront extends StatelessWidget {
                     ? Image.network(template.frontBackgroundUrl!, fit: BoxFit.cover)
                     : Container(color: Colors.grey.shade300),
               ),
+              // Primary logo — two circular seals, top-left header area.
+              // Height kept short of the photo's top (h*0.18) so the two
+              // don't overlap.
+              if (template.primaryLogoUrl != null)
+                Positioned(
+                  left: w * 0.0, top: h * 0.0, width: w * 0.22, height: h * 0.16,
+                  child: Image.network(template.primaryLogoUrl!, fit: BoxFit.contain),
+                ),
               // Photo — left third of the card. Reuses the existing
-              // photo-with-fallback-initials-avatar widget (Step 1).
+              // photo-with-fallback-initials-avatar widget (Step 1). Height
+              // trimmed to h*0.68 (was h*0.74) so it stops short of the
+              // secondary logo below (top: h*0.88) instead of overlapping it.
               Positioned(
-                left: w * 0.03, top: h * 0.18, width: w * 0.30, height: h * 0.74,
+                left: w * 0.03, top: h * 0.18, width: w * 0.30, height: h * 0.68,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(w * 0.02),
                   child: ProfileImage(student: student),

@@ -68,10 +68,20 @@ class IdCardBack extends ConsumerWidget {
                 child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.bottomLeft,
                     child: Text(student.fullName, style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 16))),
               ),
-              // QR code — the reference design's bottom-left placeholder slot.
+              // QR code — bottom-left region (x 0-45%), sized as a genuinely
+              // square, scannable box rather than the reference design's
+              // literal (too-small) placeholder slot. `width`/`height` below
+              // are chosen so the box comes out square in actual pixels for
+              // the default 1.6 aspect ratio (height-fraction = 1.6 *
+              // width-fraction), comfortably clear of the right-side content
+              // that starts at x 45%.
               Positioned(
-                left: w * 0.02, top: h * 0.82, width: w * 0.30, height: h * 0.16,
-                child: QrImageView(data: student.qrDisplayData, backgroundColor: Colors.white),
+                left: w * 0.03, top: h * 0.32, width: w * 0.40, height: h * 0.64,
+                child: QrImageView(
+                  data: student.qrDisplayData,
+                  backgroundColor: Colors.white,
+                  padding: EdgeInsets.zero,
+                ),
               ),
             ],
           );
@@ -81,33 +91,71 @@ class IdCardBack extends ConsumerWidget {
   }
 
   void _showAddEmergencyContactDialog(BuildContext context, WidgetRef ref) {
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Emergency Contact'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Name')),
-            TextField(controller: phoneController, decoration: const InputDecoration(labelText: 'Phone Number')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              ref.read(authStateProvider.notifier).updateProfile(
-                    emergencyContactName: nameController.text.trim(),
-                    emergencyContactPhone: phoneController.text.trim(),
-                  );
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
+      builder: (_) => _EmergencyContactDialog(
+        onSave: (name, phone) {
+          ref.read(authStateProvider.notifier).updateProfile(
+                emergencyContactName: name,
+                emergencyContactPhone: phone,
+              );
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Emergency contact saved.')),
+            );
+          }
+        },
+      ),
+    );
+  }
+}
+
+/// Dialog content for "+ Add emergency contact" — a private [StatefulWidget]
+/// so its two [TextEditingController]s get disposed when the dialog closes.
+/// (The previous inline implementation created a fresh controller pair every
+/// time the dialog opened but never disposed either, leaking one pair per
+/// open.)
+class _EmergencyContactDialog extends StatefulWidget {
+  final void Function(String name, String phone) onSave;
+
+  const _EmergencyContactDialog({required this.onSave});
+
+  @override
+  State<_EmergencyContactDialog> createState() => _EmergencyContactDialogState();
+}
+
+class _EmergencyContactDialogState extends State<_EmergencyContactDialog> {
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Emergency Contact'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Name')),
+          TextField(controller: _phoneController, decoration: const InputDecoration(labelText: 'Phone Number')),
         ],
       ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(
+          onPressed: () {
+            widget.onSave(_nameController.text.trim(), _phoneController.text.trim());
+            Navigator.pop(context);
+          },
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

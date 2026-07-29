@@ -24,14 +24,25 @@ class IdCardTemplateModel {
 
   factory IdCardTemplateModel.fromJson(Map<String, dynamic> json) {
     return IdCardTemplateModel(
-      frontBackgroundUrl: json['frontBackgroundUrl']?.toString(),
+      frontBackgroundUrl: _nullIfEmpty(json['frontBackgroundUrl']),
       frontAspectRatio: (json['frontAspectRatio'] as num?)?.toDouble() ?? 1.6,
-      backBackgroundUrl: json['backBackgroundUrl']?.toString(),
+      backBackgroundUrl: _nullIfEmpty(json['backBackgroundUrl']),
       backAspectRatio: (json['backAspectRatio'] as num?)?.toDouble() ?? 1.6,
-      mayorName: json['mayorName']?.toString(),
-      mayorSignatureUrl: json['mayorSignatureUrl']?.toString(),
-      primaryLogoUrl: json['primaryLogoUrl']?.toString(),
-      secondaryLogoUrl: json['secondaryLogoUrl']?.toString(),
+      mayorName: _nullIfEmpty(json['mayorName']),
+      mayorSignatureUrl: _nullIfEmpty(json['mayorSignatureUrl']),
+      primaryLogoUrl: _nullIfEmpty(json['primaryLogoUrl']),
+      secondaryLogoUrl: _nullIfEmpty(json['secondaryLogoUrl']),
     );
+  }
+
+  // An admin can save the template form with a field left blank (e.g.
+  // activate before uploading every image, or before naming the mayor),
+  // which round-trips through Firestore as `''`, not absent. `''` is
+  // non-null, so every `!= null` guard in this model's consumers (and the
+  // "no active template" fallback in qr_code_screen.dart) would otherwise
+  // treat a blank field as "present" and try to render it.
+  static String? _nullIfEmpty(dynamic v) {
+    final s = v?.toString().trim();
+    return (s == null || s.isEmpty) ? null : s;
   }
 }

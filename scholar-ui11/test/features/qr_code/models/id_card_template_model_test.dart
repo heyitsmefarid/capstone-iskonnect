@@ -33,4 +33,24 @@ void main() {
     expect(model.frontBackgroundUrl, isNull);
     expect(model.backBackgroundUrl, isNull);
   });
+
+  test('fromJson treats empty/whitespace-only strings as null, not present', () {
+    // An admin can save the template form with fields left blank (e.g.
+    // activate before uploading every image), which round-trips through
+    // Firestore as '', not absent. '' must not satisfy a `!= null` check.
+    final model = IdCardTemplateModel.fromJson({
+      'frontBackgroundUrl': '',
+      'backBackgroundUrl': '   ',
+      'mayorName': '',
+      'mayorSignatureUrl': '',
+      'primaryLogoUrl': '',
+      'secondaryLogoUrl': '',
+    });
+    expect(model.frontBackgroundUrl, isNull);
+    expect(model.backBackgroundUrl, isNull);
+    expect(model.mayorName, isNull);
+    expect(model.mayorSignatureUrl, isNull);
+    expect(model.primaryLogoUrl, isNull);
+    expect(model.secondaryLogoUrl, isNull);
+  });
 }
