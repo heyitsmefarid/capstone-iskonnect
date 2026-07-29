@@ -8,6 +8,7 @@ import 'package:iskonnectttt/features/auth/screens/registration_screen.dart';
 import 'package:iskonnectttt/features/auth/screens/registration_success_screen.dart';
 import 'package:iskonnectttt/features/auth/screens/email_verification_screen.dart';
 import 'package:iskonnectttt/features/auth/screens/forgot_password_screen.dart';
+import 'package:iskonnectttt/features/auth/screens/change_password_screen.dart';
 import 'package:iskonnectttt/features/dashboard/screens/dashboard_screen.dart';
 import 'package:iskonnectttt/features/dashboard/screens/applicant_dashboard_screen.dart';
 import 'package:iskonnectttt/features/profile/screens/profile_screen.dart';
@@ -59,6 +60,19 @@ String? celebrationRedirectTarget({
 }) {
   if (celebrationPending && !isCelebrating) return '/celebration';
   if (!celebrationPending && isCelebrating) return '/dashboard';
+  return null;
+}
+
+/// Pure decision used by the router's redirect callback: forces a scholar
+/// whose account still has a temporary password to the change-password
+/// screen before anything else (including the celebration screen). A
+/// standalone function so it's unit-testable without constructing a
+/// GoRouter/ProviderScope.
+String? mustChangePasswordRedirectTarget({
+  required bool mustChangePassword,
+  required bool onChangePasswordScreen,
+}) {
+  if (mustChangePassword && !onChangePasswordScreen) return '/change-password';
   return null;
 }
 
@@ -124,6 +138,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return isLoggingIn ? null : '/login';
       }
 
+      final student = ref.read(currentStudentProvider);
+      final mustChangeRedirect = mustChangePasswordRedirectTarget(
+        mustChangePassword: student?.mustChangePassword ?? false,
+        onChangePasswordScreen: state.matchedLocation == '/change-password',
+      );
+      if (mustChangeRedirect != null) return mustChangeRedirect;
+
       final celebration = ref.read(_celebrationStatusProvider);
       final celebrationPending = celebration.isScholar && !celebration.celebrationSeen;
       final isCelebrating = state.matchedLocation == '/celebration';
@@ -177,6 +198,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/celebration',
         name: 'celebration',
         builder: (context, state) => const CongratulationsScreen(),
+      ),
+      GoRoute(
+        path: '/change-password',
+        name: 'change-password',
+        builder: (context, state) => const ChangePasswordScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
@@ -235,6 +261,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 name: 'add-cor',
                 builder: (context, state) =>
                     const AddGradeScreen(corOnly: true),
+              ),
+              GoRoute(
+                path: 'add-cog',
+                name: 'add-cog',
+                builder: (context, state) =>
+                    const AddGradeScreen(cogOnly: true),
               ),
             ],
           ),
