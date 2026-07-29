@@ -48,15 +48,31 @@ service cloud.firestore {
     // Real sessions (scholars/applicants, now on real email/password sign-in)
     // are restricted to their own doc (matched by uid) and a narrow field
     // allowlist on update.
+    //
+    // Reads stay at signedIn() (any real-or-anonymous session), not narrowed
+    // to self-only: Firestore has no field-level read redaction, and
+    // messaging_provider.dart's group-chat member lookup (fetchUsersByIds,
+    // a whereIn(documentId) query) needs to read OTHER members' docs for
+    // name/school/program display — Firestore denies an ENTIRE query if any
+    // one of its possible results would be denied, so a self-only read rule
+    // would break every multi-member group chat for a real scholar session.
+    // The original motivation for tightening reads (any session could read
+    // another scholar's plaintext password) no longer applies: the plaintext
+    // password field is gone from Firestore entirely as of this plan.
     match /users/{userId} {
-      allow read: if isAnonymous() || resource.data.uid == request.auth.uid;
+      allow read: if signedIn();
       allow create: if isAnonymous() || request.resource.data.uid == request.auth.uid;
       allow update: if isAnonymous()
                  || (resource.data.uid == request.auth.uid
                      && request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['mustChangePassword','passwordChangedAt','activatedAt','lastLogin',
                                     'houseNo','street','barangay','city','province','gender','contactNumber',
-                                    'profilePicture','celebrationSeen']));
+                                    'profilePicture','celebrationSeen',
+                                    // Scholar self-service data the live app already writes to its own
+                                    // doc (grades_provider.dart, scholar_firestore_service.dart) —
+                                    // distinct from admin-only award-integrity fields like scholarId/
+                                    // amountGranted/status, which stay off this allowlist.
+                                    'grades','cogSubmissions','corSubmissions','requirements']));
       allow delete: if isAnonymous();
     }
 
