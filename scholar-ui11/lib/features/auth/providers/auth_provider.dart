@@ -408,12 +408,53 @@ class AuthNotifier extends StateNotifier<AuthState> {
           password: '',
         ),
       );
+      // Persist the profile doc BEFORE treating registration as successful.
+      // Unlike every other write in this file, this one must not silently
+      // swallow failures via `_saveStudentToFirestoreSafely`: a live
+      // Firebase Auth account with no backing Firestore doc would make
+      // `login()` report "Account not found" and sign the user back out,
+      // while re-registering the same email would then fail forever with
+      // 'email-already-in-use'. So this uses the throwing
+      // `_saveStudentToFirestore` directly and rolls back the just-created
+      // Auth account on failure, mirroring the "no dangling half-registered
+      // session" discipline `login()` already applies to its own failure
+      // paths.
+      try {
+        if (_studentsCollection == null) {
+          throw StateError('Firestore is not configured.');
+        }
+        await _saveStudentToFirestore(storedStudent);
+      } catch (_) {
+        // Best-effort rollback so the email isn't permanently orphaned and
+        // the applicant can safely retry registration with the same
+        // address.
+        try {
+          await credential.user?.delete();
+        } catch (_) {
+          // Deletion can fail too (e.g. offline) — fall through and at
+          // least sign out below so this device isn't left in a
+          // half-registered, signed-in state with no backing profile.
+        }
+        if (FirebaseAuth.instance.currentUser != null) {
+          try {
+            await FirebaseAuth.instance.signOut();
+          } catch (_) {
+            // Best-effort — don't let a signOut failure mask the real error.
+          }
+        }
+        state = state.copyWith(
+          isLoading: false,
+          error:
+              'Registration could not be completed. Please check your connection and try again.',
+        );
+        return false;
+      }
+
       _registeredStudents[storedStudent.id] = storedStudent;
       _pendingRegistration = storedStudent;
 
       // Save to persistent storage
       await _saveStudentsToStorage();
-      await _saveStudentToFirestoreSafely(storedStudent);
 
       state = state.copyWith(isLoading: false);
       return true;
