@@ -39,6 +39,15 @@ class ApiConfig {
       ? '$formBaseUrl/generateApplicationForm'
       : '$functionsBaseUrl/generateApplicationForm';
 
+  /// Root of the self-hosted form service, for a best-effort warm-up ping —
+  /// free hosting tiers sleep when idle and can take ~50s to cold start, which
+  /// is longer than an applicant will wait after tapping Preview.
+  ///
+  /// Null when no [formBaseUrl] override is set: the request then goes to Cloud
+  /// Functions, which don't sleep, so there is nothing to wake.
+  static String? get formServiceOrigin =>
+      formBaseUrl.isNotEmpty ? formBaseUrl : null;
+
   // ── Email OTP verification ────────────────────────────────────────────────
   // Uses the PHP + PHPMailer backend when OTP_BASE_URL is set; otherwise the
   // SMTP-backed Cloud Functions.
@@ -57,4 +66,28 @@ class ApiConfig {
       : '$functionsBaseUrl/requestPasswordResetOTP';
   static String get resetPasswordWithOTP =>
       '$functionsBaseUrl/resetPasswordWithOTP';
+}
+
+/// EmailJS configuration — lets the app email the verification code directly
+/// from the browser (no backend/hosting needed). The code itself is generated
+/// and verified in-app. Values come from the EmailJS dashboard; the public key
+/// is safe to ship (it only works from allow-listed origins).
+///
+/// Override at build time if needed, e.g.:
+///   flutter build web --release --dart-define=EMAILJS_SERVICE_ID=service_xxxx
+class EmailJsConfig {
+  const EmailJsConfig._();
+
+  static const String endpoint = 'https://api.emailjs.com/api/v1.0/email/send';
+
+  static const String serviceId = String.fromEnvironment('EMAILJS_SERVICE_ID',
+      defaultValue: 'service_eutbznw');
+  static const String templateId = String.fromEnvironment(
+      'EMAILJS_TEMPLATE_ID',
+      defaultValue: 'template_q1mmi8v');
+  static const String publicKey = String.fromEnvironment('EMAILJS_PUBLIC_KEY',
+      defaultValue: 'SfuTnV6KYTzVV-sVD');
+
+  static bool get isConfigured =>
+      serviceId.isNotEmpty && templateId.isNotEmpty && publicKey.isNotEmpty;
 }

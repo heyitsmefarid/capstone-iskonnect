@@ -1,0 +1,40 @@
+# Render Blueprint for the BFCSP application-form PDF service.
+#
+# This exists so the scholar app's "Preview application form" works in shipped
+# builds. The app falls back to the Firebase Cloud Functions URL when no
+# FORM_BASE_URL is supplied at build time, and this project deliberately does
+# not deploy Cloud Functions (Blaze plan not required — see
+# backend/functions/local-form-server.js), so that fallback 404s. Hosting the
+# standalone server here gives release APKs a reachable endpoint.
+#
+# To deploy: push this repo to GitHub, then in Render choose
+# New → Blueprint → select the repo → Apply. Every field below is read from
+# this file, so there is nothing to fill in by hand.
+#
+# After the first deploy, copy the service URL and build the app with it:
+#   flutter build apk --release \
+#     --dart-define=FORM_BASE_URL=https://<service>.onrender.com
+#
+# Note: the `free` plan sleeps after ~15 minutes idle and cold-starts in
+# roughly 50 seconds. The app issues a best-effort warm-up ping when the
+# applicant opens the form screen (BfcspFormApi.warmUp) and allows 60s for
+# generation, which covers a cold start. Move to a paid plan for an
+# always-on instance.
+services:
+  - type: web
+    name: bfcsp-form-server
+    runtime: node
+    plan: free
+    # Closest free region to Calapan City / Oriental Mindoro.
+    region: singapore
+    rootDir: backend/functions
+    # `npm ci` (not `install`) so builds honour the committed package-lock.json.
+    buildCommand: npm ci
+    startCommand: npm start
+    # local-form-server.js answers GET / with {"status":"ok"}. Without this,
+    # Render's probe would hit the catch-all 404 and hold the service unhealthy.
+    healthCheckPath: /
+    envVars:
+      # Matches "engines": { "node": "20" } in backend/functions/package.json.
+      - key: NODE_VERSION
+        value: "20"

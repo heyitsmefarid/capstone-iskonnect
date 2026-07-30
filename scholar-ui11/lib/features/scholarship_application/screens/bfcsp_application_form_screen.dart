@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -110,6 +112,10 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
   @override
   void initState() {
     super.initState();
+    // Start waking the (possibly sleeping) form service now, so it is booted by
+    // the time the applicant finishes the form and taps Preview. Deliberately
+    // not awaited — it must never delay building this screen.
+    unawaited(BfcspFormApi.warmUp());
     _app = BfcspApplicationModel(userId: widget.userId ?? widget.student?.id);
     if (widget.draftId != null) {
       _draftId = widget.draftId;
@@ -388,22 +394,23 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
       // is intentionally no local fallback — a divergent offline layout would
       // not match the official document.
       final pdfBytes = await BfcspFormApi.generate(_app);
-      if (pdfBytes == null) {
-        _showSnack(
-          'Couldn\'t reach the form service. Please check your connection and try again.',
-          error: true,
-        );
-      } else if (mounted) {
-        // Download the filled form (on web this saves the PDF file directly).
+      if (mounted) {
+        // Show an actual in-app preview (print/save/share are reachable from
+        // that screen too) instead of jumping straight to the share sheet.
         final f = _app;
         final namePart = [f.lastName, f.firstName]
             .where((p) => p.trim().isNotEmpty)
             .join('_');
-        await Printing.sharePdf(
-          bytes: pdfBytes,
-          filename: 'BFCSP_Application_Form${namePart.isEmpty ? '' : '_$namePart'}.pdf',
+        await Printing.layoutPdf(
+          onLayout: (_) async => pdfBytes,
+          name: 'BFCSP_Application_Form${namePart.isEmpty ? '' : '_$namePart'}.pdf',
         );
       }
+    } on BfcspFormException catch (e) {
+      // Surface the specific reason (unreachable / timeout / HTTP status)
+      // rather than a generic "check your connection", which previously
+      // masked a server-side 404.
+      _showSnack(e.message, error: true);
     } catch (e) {
       _showSnack('PDF generation failed: $e', error: true);
     }

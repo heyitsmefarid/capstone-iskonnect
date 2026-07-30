@@ -1,8 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required by every network call the app makes (Cloud Functions, the
+         BFCSP form service, Cloudinary uploads, remote PDF fetches). Only the
+         debug/ and profile/ manifests declared this, so release builds were
+         relying entirely on firebase-auth/firestore/storage happening to
+         declare it transitively — dropping or swapping any of those would
+         have silently killed all networking in shipped APKs. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Event-reminder local notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Required by gal (saving the Scholarship ID) on API <= 29 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
     <application
         android:label="Iskonnect"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
