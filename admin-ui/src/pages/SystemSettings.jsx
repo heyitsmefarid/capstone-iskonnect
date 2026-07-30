@@ -78,13 +78,14 @@ export default function SystemSettings() {
   const [formValues, setFormValues] = useState({});
   const [programSchoolFilter, setProgramSchoolFilter] = useState('');
 
-  // Scholar ID card template — the images/mayor-name the scholar app composites
-  // onto a scholar's digital ID card.
+  // Scholar ID card template — the images the scholar app composites onto a
+  // scholar's digital ID card. The mayor's signature image already has the
+  // printed name baked into it (signature over printed name), so there's no
+  // separate mayor-name text field.
   const [templateForm, setTemplateForm] = useState({
     frontBackgroundUrl: '', frontAspectRatio: null,
     backBackgroundUrl: '', backAspectRatio: null,
-    mayorName: '', mayorSignatureUrl: '',
-    primaryLogoUrl: '', secondaryLogoUrl: '',
+    mayorSignatureUrl: '', mayorLogoUrl: '',
   });
   const [templateUploading, setTemplateUploading] = useState('');
 
@@ -388,15 +389,19 @@ export default function SystemSettings() {
   const TEMPLATE_IMAGE_FIELDS = [
     { field: 'frontBackgroundUrl', aspectField: 'frontAspectRatio', label: 'Front Background' },
     { field: 'backBackgroundUrl',  aspectField: 'backAspectRatio',  label: 'Back Background' },
-    { field: 'mayorSignatureUrl',  aspectField: null, label: "Mayor's Signature" },
-    { field: 'primaryLogoUrl',     aspectField: null, label: 'Primary Logo' },
-    { field: 'secondaryLogoUrl',   aspectField: null, label: 'Secondary Logo' },
+    { field: 'mayorSignatureUrl',  aspectField: null, label: "Mayor's Signature (over printed name)" },
+    { field: 'mayorLogoUrl',              aspectField: null, label: "Mayor's Logo" },
   ];
 
   const renderIdCardTemplateTab = () => (
     <div className="settings-grid">
       <section className="settings-section">
-        <div className="section-header-row"><CreditCard size={18} /><h3>ID Card Images</h3></div>
+        <div className="section-header-row">
+          <CreditCard size={18} /><h3>ID Card Images</h3>
+          {idCardTemplate?.isActive && (
+            <span className="status-badge active" style={{ marginLeft: 8 }}>Activated</span>
+          )}
+        </div>
         <div className="settings-form">
           {TEMPLATE_IMAGE_FIELDS.map(({ field, aspectField, label }) => (
             <div className="form-group" key={field}>
@@ -417,21 +422,6 @@ export default function SystemSettings() {
               )}
             </div>
           ))}
-        </div>
-      </section>
-
-      <section className="settings-section">
-        <div className="section-header-row"><Settings size={18} /><h3>Mayor Details</h3></div>
-        <div className="settings-form">
-          <div className="form-group">
-            <label>Mayor's Name</label>
-            <input
-              type="text"
-              value={templateForm.mayorName}
-              onChange={e => setTemplateForm(prev => ({ ...prev, mayorName: e.target.value }))}
-              placeholder="Hon. Juan Dela Cruz"
-            />
-          </div>
         </div>
       </section>
 
@@ -457,9 +447,6 @@ export default function SystemSettings() {
                 </div>
               )}
             </div>
-          )}
-          {templateForm.mayorName && (
-            <p style={{ marginTop: '0.75rem', marginBottom: 0 }}>Mayor: {templateForm.mayorName}</p>
           )}
         </div>
       </section>

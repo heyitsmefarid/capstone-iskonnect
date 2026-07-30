@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:iskonnectttt/features/qr_code/models/id_card_template_model.dart';
 
+/// Near-black warm gray used for every dynamic text overlay on the back card
+/// — matches the reference design's actual text color.
+const _kIdCardTextColor = Color(0xFF242424);
+
 /// Back of the templated scholar ID card: personal information, emergency
 /// contact (with an inline "add" affordance if missing), the scholar's QR
 /// code, and their typed name in a script font as a signature stand-in (this
-/// app has no signature-capture feature).
+/// app has no signature-capture feature). The "ADDRESS" / "DATE OF BIRTH" /
+/// "IN CASE OF EMERGENCY, NOTIFY" labels are baked into the back background
+/// artwork — only the values below each label are rendered dynamically here.
+/// Coordinates are read directly off the reference PSD's layer bounding boxes
+/// (canvas 1687x1063); the info column is center-aligned because every one
+/// of its label/value boxes shares the same horizontal center (~68.8% of
+/// card width) in the source design.
 class IdCardBack extends ConsumerWidget {
   final IdCardTemplateModel template;
 
@@ -34,49 +45,59 @@ class IdCardBack extends ConsumerWidget {
                     ? Image.network(template.backBackgroundUrl!, fit: BoxFit.cover)
                     : Container(color: Colors.grey.shade200),
               ),
-              // Address.
+              // Address value (label baked into background above this box).
               Positioned(
-                left: w * 0.45, top: h * 0.33, width: w * 0.53, height: h * 0.09,
-                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
-                    child: Text(student.fullAddress, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                left: w * 0.40, top: h * 0.363, width: w * 0.58, height: h * 0.06,
+                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.center,
+                    child: Text(student.fullAddress, textAlign: TextAlign.center,
+                        style: GoogleFonts.fredoka(fontWeight: FontWeight.w600, fontSize: 19, color: _kIdCardTextColor))),
               ),
-              // Date of birth.
+              // Date of birth value (label baked into background above this box).
               Positioned(
-                left: w * 0.45, top: h * 0.43, width: w * 0.53, height: h * 0.09,
-                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                left: w * 0.40, top: h * 0.475, width: w * 0.58, height: h * 0.06,
+                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.center,
                     child: Text('${student.dateOfBirth.month}/${student.dateOfBirth.day}/${student.dateOfBirth.year}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.fredoka(fontWeight: FontWeight.w600, fontSize: 19, color: _kIdCardTextColor))),
               ),
-              // Emergency contact — or an inline "add" affordance if missing.
+              // Emergency contact (name + phone, label baked into background
+              // above this box) — or an inline "add" affordance if missing.
               Positioned(
-                left: w * 0.45, top: h * 0.53, width: w * 0.53, height: h * 0.17,
+                left: w * 0.40, top: h * 0.60, width: w * 0.58, height: h * 0.10,
                 child: hasEmergencyContact
                     ? FittedBox(
-                        fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+                        fit: BoxFit.scaleDown, alignment: Alignment.center,
                         child: Text('${student.emergencyContactName}\n${student.emergencyContactPhone}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.fredoka(fontWeight: FontWeight.w600, fontSize: 20, color: _kIdCardTextColor)),
                       )
-                    : InkWell(
-                        onTap: () => _showAddEmergencyContactDialog(context, ref),
-                        child: const Text('+ Add emergency contact',
-                            style: TextStyle(fontSize: 11, color: Colors.blue, decoration: TextDecoration.underline)),
+                    : Center(
+                        child: InkWell(
+                          onTap: () => _showAddEmergencyContactDialog(context, ref),
+                          child: Text('+ Add emergency contact',
+                              style: GoogleFonts.fredoka(
+                                  fontSize: 14, color: Colors.blue, decoration: TextDecoration.underline)),
+                        ),
                       ),
               ),
-              // Scholar's own name, script font, as a signature stand-in.
+              // Scholar's own name, genuine cursive/script font, as a
+              // signature stand-in (this app has no signature-capture
+              // feature) — sits over the signature-line artwork baked into
+              // the background.
               Positioned(
-                left: w * 0.45, top: h * 0.74, width: w * 0.53, height: h * 0.18,
-                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.bottomLeft,
-                    child: Text(student.fullName, style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 16))),
+                left: w * 0.40, top: h * 0.841, width: w * 0.58, height: h * 0.06,
+                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.center,
+                    child: Text(student.fullName, textAlign: TextAlign.center,
+                        style: GoogleFonts.dancingScript(fontWeight: FontWeight.w700, fontSize: 30, color: _kIdCardTextColor))),
               ),
-              // QR code — bottom-left region (x 0-45%), sized as a genuinely
-              // square, scannable box rather than the reference design's
-              // literal (too-small) placeholder slot. `width`/`height` below
-              // are chosen so the box comes out square in actual pixels for
-              // the default 1.6 aspect ratio (height-fraction = 1.6 *
-              // width-fraction), comfortably clear of the right-side content
-              // that starts at x 45%.
+              // QR code — left region. Measured directly off this widget's
+              // own rendered output: the previous box's bottom edge (0.8025)
+              // was essentially touching the blue accent block's top edge
+              // (0.804, measured from the actual downloaded card render), so
+              // it's shrunk slightly to leave a real gap above the block.
+              // Sized as a genuine square on the card's aspect ratio.
               Positioned(
-                left: w * 0.03, top: h * 0.32, width: w * 0.40, height: h * 0.64,
+                left: w * 0.0267, top: h * 0.3321, width: w * 0.282, height: h * 0.448,
                 child: QrImageView(
                   data: student.qrDisplayData,
                   backgroundColor: Colors.white,

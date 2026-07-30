@@ -6,20 +6,23 @@ class IdCardTemplateModel {
   final double frontAspectRatio;
   final String? backBackgroundUrl;
   final double backAspectRatio;
-  final String? mayorName;
+  // Mayor's signature image already has the printed name baked into it
+  // (signature over printed name, one combined image) — no separate mayor
+  // name text field.
   final String? mayorSignatureUrl;
-  final String? primaryLogoUrl;
-  final String? secondaryLogoUrl;
+  // The mayor's own administration/campaign logo. The two city-agency seals
+  // (Calapan City + City Education Department) are permanent government
+  // symbols that never change with the administration, so they're baked
+  // into the front background artwork instead of being separate uploads.
+  final String? mayorLogoUrl;
 
   const IdCardTemplateModel({
     this.frontBackgroundUrl,
     this.frontAspectRatio = 1.6,
     this.backBackgroundUrl,
     this.backAspectRatio = 1.6,
-    this.mayorName,
     this.mayorSignatureUrl,
-    this.primaryLogoUrl,
-    this.secondaryLogoUrl,
+    this.mayorLogoUrl,
   });
 
   factory IdCardTemplateModel.fromJson(Map<String, dynamic> json) {
@@ -28,10 +31,8 @@ class IdCardTemplateModel {
       frontAspectRatio: (json['frontAspectRatio'] as num?)?.toDouble() ?? 1.6,
       backBackgroundUrl: _nullIfEmpty(json['backBackgroundUrl']),
       backAspectRatio: (json['backAspectRatio'] as num?)?.toDouble() ?? 1.6,
-      mayorName: _nullIfEmpty(json['mayorName']),
       mayorSignatureUrl: _nullIfEmpty(json['mayorSignatureUrl']),
-      primaryLogoUrl: _nullIfEmpty(json['primaryLogoUrl']),
-      secondaryLogoUrl: _nullIfEmpty(json['secondaryLogoUrl']),
+      mayorLogoUrl: _nullIfEmpty(json['mayorLogoUrl']),
     );
   }
 

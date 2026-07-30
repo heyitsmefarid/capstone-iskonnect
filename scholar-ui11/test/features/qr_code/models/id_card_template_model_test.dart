@@ -9,14 +9,13 @@ void main() {
       'frontAspectRatio': 1.6,
       'backBackgroundUrl': 'https://example.com/back.png',
       'backAspectRatio': 1.6,
-      'mayorName': 'Atty. Doy C. Leachon',
       'mayorSignatureUrl': 'https://example.com/sig.png',
-      'primaryLogoUrl': 'https://example.com/logo1.png',
-      'secondaryLogoUrl': 'https://example.com/logo2.png',
+      'mayorLogoUrl': 'https://example.com/mayor-logo.png',
     });
     expect(model.frontBackgroundUrl, 'https://example.com/front.png');
     expect(model.frontAspectRatio, 1.6);
-    expect(model.mayorName, 'Atty. Doy C. Leachon');
+    expect(model.mayorSignatureUrl, 'https://example.com/sig.png');
+    expect(model.mayorLogoUrl, 'https://example.com/mayor-logo.png');
   });
 
   test('fromJson defaults aspect ratios to a sane fallback when missing', () {
@@ -41,16 +40,12 @@ void main() {
     final model = IdCardTemplateModel.fromJson({
       'frontBackgroundUrl': '',
       'backBackgroundUrl': '   ',
-      'mayorName': '',
       'mayorSignatureUrl': '',
-      'primaryLogoUrl': '',
-      'secondaryLogoUrl': '',
+      'mayorLogoUrl': '',
     });
     expect(model.frontBackgroundUrl, isNull);
     expect(model.backBackgroundUrl, isNull);
-    expect(model.mayorName, isNull);
     expect(model.mayorSignatureUrl, isNull);
-    expect(model.primaryLogoUrl, isNull);
-    expect(model.secondaryLogoUrl, isNull);
+    expect(model.mayorLogoUrl, isNull);
   });
 }
