@@ -38,3 +38,31 @@ services:
       # Matches "engines": { "node": "20" } in backend/functions/package.json.
       - key: NODE_VERSION
         value: "20"
+
+  # Runs scheduled-backup.js once a day. Cron Jobs (unlike a free Web
+  # Service) aren't affected by idle-sleep, so this is the reliable place for
+  # anything that must run on a schedule even if no admin ever opens the
+  # browser. The script itself checks admin-ui's chosen backup frequency
+  # (Administration > Backup & Restore) and only actually does anything once
+  # a week/month has elapsed since the last run — see scheduled-backup.js's
+  # header comment for why "check daily" beats scheduling the exact cron
+  # expression directly.
+  - type: cron
+    name: iskonnect-scheduled-backup
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: backend/functions
+    buildCommand: npm ci
+    startCommand: node scheduled-backup.js
+    schedule: "0 0 * * *" # every day at 00:00 UTC
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Full JSON contents of a Firebase service account key (Project
+      # Settings > Service Accounts > Generate New Private Key in the
+      # Firebase console). `sync: false` means Render won't accept a value
+      # from this file — set it as a secret directly in the Render
+      # dashboard for this service. NEVER commit the actual key to this repo.
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
