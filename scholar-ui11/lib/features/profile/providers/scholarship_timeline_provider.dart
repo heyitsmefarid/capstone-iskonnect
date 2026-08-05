@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iskonnectttt/core/models/scholarship_timeline_model.dart';
 import 'package:iskonnectttt/core/services/scholar_firestore_service.dart';
@@ -168,58 +170,88 @@ final timelineProgressProvider = Provider<double>((ref) {
   return timeline.progressPercentage;
 });
 
+/// Maps a student doc's `enrolledSemesters` into disbursement records, most
+/// recent grant treated as the latest chronological term. Returns null if
+/// there's nothing to map (caller falls back to the legacy academic_records
+/// path). Pulled out of DisbursementNotifier so the mapping — which is what
+/// actually determines "Total Scholarship Received" — can be unit-tested
+/// without a live Firestore doc.
+List<ScholarshipDisbursement>? mapEnrolledSemestersToDisbursements(
+  Map<String, dynamic>? studentDoc,
+) {
+  final enrolled = studentDoc?['enrolledSemesters'];
+  if (enrolled is! List || enrolled.isEmpty) return null;
+
+  final list = enrolled
+      .whereType<Map>()
+      .map((e) => Map<String, dynamic>.from(e))
+      .toList()
+    ..sort((a, b) => ScholarFirestoreService.parseDateTime(a['enrolledAt'])
+        .compareTo(ScholarFirestoreService.parseDateTime(b['enrolledAt'])));
+
+  final ay = studentDoc?['academicYear']?.toString() ?? '';
+  final startYear = int.tryParse(ay.split('-').first) ?? DateTime.now().year;
+
+  final mapped = <ScholarshipDisbursement>[];
+  for (var i = 0; i < list.length; i++) {
+    final e = list[i];
+    final sy = startYear + (i ~/ 2); // new school year every 2 semesters
+    final isFirstSem = i.isEven;
+    mapped.add(ScholarshipDisbursement(
+      id: '$sy-${isFirstSem ? 1 : 2}',
+      semester: isFirstSem ? '1st Semester' : '2nd Semester',
+      academicYear: '$sy-${sy + 1}',
+      amount: (e['grantedAmount'] ?? 0).toDouble(),
+      disbursedDate: ScholarFirestoreService.parseDateTime(e['enrolledAt']),
+      status: e['status']?.toString() ?? 'disbursed',
+    ));
+  }
+  return mapped.isEmpty ? null : mapped;
+}
+
 /// Provider for scholarship disbursements
+///
+/// Was a one-time `.get()` at construction, so an admin granting a new
+/// semester's disbursement (Evaluate Enrollment, or confirming grades — see
+/// grantSemesterIfNeeded in AppContext.jsx) never reached a scholar already
+/// signed in: "Semesters Used" ticked forward live (authStateProvider streams
+/// the same doc), but "Total Scholarship Received" stayed stuck at whatever
+/// it was when the app launched, until the scholar logged out and back in
+/// (which invalidates this provider — see resetPerStudentProviders). Now
+/// listens on the same live doc stream `authStateProvider` uses, so a new
+/// grant shows up immediately.
 class DisbursementNotifier
     extends StateNotifier<List<ScholarshipDisbursement>> {
+  StreamSubscription<Map<String, dynamic>?>? _studentSub;
+  String? _studentId;
+
   DisbursementNotifier() : super(const []) {
-    _loadFromFirestore();
+    _subscribe();
   }
 
-  Future<void> _loadFromFirestore() async {
+  Future<void> _subscribe() async {
+    final studentId = await ScholarFirestoreService.currentStudentId();
+    if (studentId == null) return;
+    _studentId = studentId;
+    _studentSub = ScholarFirestoreService.studentDocStream(studentId).listen(
+      (studentDoc) => _applyStudentDoc(studentDoc),
+    );
+  }
+
+  Future<void> _applyStudentDoc(Map<String, dynamic>? studentDoc) async {
     try {
-      final studentId = await ScholarFirestoreService.currentStudentId();
-      if (studentId == null) return;
-
-      final studentDoc = await ScholarFirestoreService.fetchStudentDoc(studentId);
-
-      // The grant for each semester the admin advanced the scholar into lives on
-      // the user doc's `enrolledSemesters`. A scholar progresses sequentially —
-      // their 1st granted term is "1st Semester" of their starting year, the 2nd
-      // is "2nd Semester", and so on — so we derive each term's label from its
-      // chronological position rather than whatever term happened to be active.
-      final enrolled = studentDoc?['enrolledSemesters'];
-      if (enrolled is List && enrolled.isNotEmpty) {
-        final list = enrolled
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList()
-          ..sort((a, b) => ScholarFirestoreService.parseDateTime(a['enrolledAt'])
-              .compareTo(ScholarFirestoreService.parseDateTime(b['enrolledAt'])));
-
-        final ay = studentDoc?['academicYear']?.toString() ?? '';
-        final startYear = int.tryParse(ay.split('-').first) ?? DateTime.now().year;
-
-        final mapped = <ScholarshipDisbursement>[];
-        for (var i = 0; i < list.length; i++) {
-          final e = list[i];
-          final sy = startYear + (i ~/ 2); // new school year every 2 semesters
-          final isFirstSem = i.isEven;
-          mapped.add(ScholarshipDisbursement(
-            id: '$sy-${isFirstSem ? 1 : 2}',
-            semester: isFirstSem ? '1st Semester' : '2nd Semester',
-            academicYear: '$sy-${sy + 1}',
-            amount: (e['grantedAmount'] ?? 0).toDouble(),
-            disbursedDate: ScholarFirestoreService.parseDateTime(e['enrolledAt']),
-            status: e['status']?.toString() ?? 'disbursed',
-          ));
-        }
-        if (mapped.isNotEmpty) {
-          state = mapped;
-          return;
-        }
+      final mappedFromEnrolled = mapEnrolledSemestersToDisbursements(studentDoc);
+      if (mappedFromEnrolled != null) {
+        state = mappedFromEnrolled;
+        return;
       }
 
-      // Fallback: legacy disbursement records in the academic_records collection.
+      // Fallback: legacy disbursement records in the academic_records
+      // collection, for scholars who predate `enrolledSemesters` entirely.
+      // Not live (the collection has no per-scholar stream helper here), but
+      // this only runs for the legacy population this was already true for.
+      final studentId = _studentId;
+      if (studentId == null || state.isNotEmpty) return;
       final records = await ScholarFirestoreService.fetchAcademicRecords(studentId);
       if (records.isEmpty) return;
 
@@ -240,6 +272,12 @@ class DisbursementNotifier
         state = mapped;
       }
     } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _studentSub?.cancel();
+    super.dispose();
   }
 }
 

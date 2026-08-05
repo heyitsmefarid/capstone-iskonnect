@@ -1405,6 +1405,16 @@ textarea {
   backdrop-filter: blur(6px);
 }
 
+/* SweetAlert2 dialogs (confirmations, "Evaluate Enrollment", etc.) must
+   always render above the app's own modals (z-index up to 2100 for the file
+   preview modal), including when triggered from inside an already-open
+   modal. sweetalert2's own stylesheet is imported after global.css in
+   main.jsx, so its default z-index:1060 would otherwise win the cascade —
+   `body` bumps specificity so this wins regardless of import order. */
+body .swal2-container {
+  z-index: 2500;
+}
+
 .modal {
   background: var(--card-bg);
   border-radius: var(--radius-lg);
@@ -6558,6 +6568,145 @@ textarea {
 .swal2-validation-message {
   background: var(--bg-tertiary) !important;
   color: var(--text-secondary) !important;
+}
+
+/* SweetAlert's own <select> was never themed, so the rubric pickers rendered
+   as a bare white OS dropdown against the dark panel. */
+.swal2-select {
+  background: var(--input-bg) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text-primary) !important;
+  padding: 10px 12px !important;
+  font-size: 0.9rem !important;
+  min-width: 60%;
+}
+
+/* ─── Applicant scoring dialogs (utils/scoreDialogs.js) ─── */
+.score-dialog .swal2-title {
+  font-size: 1.15rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+/* Which applicant is being scored — without this the evaluator is typing a
+   number into a dialog that never says whose it is. */
+.score-dialog .score-dialog-sub {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary-light);
+}
+
+.score-dialog .score-dialog-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.score-dialog .score-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--input-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 12px 14px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.score-dialog .score-dialog-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.rubric-dialog .rubric-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 58vh;
+  overflow-y: auto;
+  text-align: left;
+  padding: 0.15rem;
+}
+
+/* Each level is a full row showing its points, name, description and (for
+   Economic Background) its Cedula/electric bands, so the criteria stay visible
+   while choosing instead of only on the reference table behind the dialog. */
+.rubric-dialog .rubric-option {
+  display: grid;
+  grid-template-columns: auto 42px 1fr;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.rubric-dialog .rubric-option:hover {
+  border-color: var(--primary);
+  background: var(--hover-bg);
+}
+
+.rubric-dialog .rubric-option.is-selected {
+  border-color: var(--primary);
+  background: rgba(45, 149, 150, 0.12);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.rubric-dialog .rubric-option input[type='radio'] {
+  margin-top: 4px;
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.rubric-dialog .rubric-option-pts {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--primary-light);
+  text-align: center;
+  line-height: 1.3;
+}
+
+.rubric-dialog .rubric-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rubric-dialog .rubric-option-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.rubric-dialog .rubric-option-meta {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary-light);
+}
+
+.rubric-dialog .rubric-option-desc {
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 640px) {
+  .rubric-dialog .rubric-option {
+    grid-template-columns: auto 34px 1fr;
+    gap: 0.5rem;
+  }
 }
 
 /* ─── Scrollbar Theme ─── */

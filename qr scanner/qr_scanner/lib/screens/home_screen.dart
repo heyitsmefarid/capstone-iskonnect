@@ -146,7 +146,7 @@ class _DashboardTab extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 // Scan button section
-                _buildScanSection(context),
+                _buildScanSection(context, attendanceProvider),
                 const SizedBox(height: 24),
 
                 // Recent scans
@@ -197,10 +197,13 @@ class _DashboardTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    event?.name ?? 'General Attendance',
-                    style: const TextStyle(
+                    event?.name ?? 'No event selected',
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
+                      color: event == null
+                          ? colorScheme.error
+                          : null,
                     ),
                   ),
                   if (event != null) ...[
@@ -266,14 +269,36 @@ class _DashboardTab extends StatelessWidget {
     );
   }
 
-  Widget _buildScanSection(BuildContext context) {
+  Widget _buildScanSection(BuildContext context, AttendanceProvider provider) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (provider.currentEvent == null) {
+      return Column(
+        children: [
+          Text(
+            provider.eventsLoading
+                ? 'Loading events…'
+                : 'Select an event before scanning',
+            style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+          if (!provider.eventsLoading)
+            FilledButton.icon(
+              onPressed: () => _showEventSelector(context),
+              icon: const Icon(Icons.event_rounded),
+              label: const Text('Select Event'),
+            ),
+        ],
+      );
+    }
+
     return Column(
       children: [
         Text(
           'Tap to scan student QR code',
           style: TextStyle(
             fontSize: 16,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 20),
@@ -388,14 +413,6 @@ class _DashboardTab extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      TextButton.icon(
-                        onPressed: () => _showAddEventDialog(context),
-                        icon: Icon(
-                          Icons.add_rounded,
-                          color: colorScheme.primary,
-                        ),
-                        label: const Text('Add Event'),
-                      ),
                       IconButton(
                         onPressed: () => Navigator.pop(context),
                         icon: Icon(Icons.close, color: colorScheme.onSurface),
@@ -408,6 +425,37 @@ class _DashboardTab extends StatelessWidget {
                   child: Consumer<AttendanceProvider>(
                     builder: (context, provider, _) {
                       final events = provider.events;
+
+                      if (provider.eventsLoading && events.isEmpty) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      }
+
+                      if (events.isEmpty) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.event_busy_rounded,
+                                  size: 40,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No events scheduled yet',
+                                  style: TextStyle(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
 
                       return ListView.builder(
                         itemCount: events.length,
@@ -453,101 +501,4 @@ class _DashboardTab extends StatelessWidget {
     );
   }
 
-  Future<void> _showAddEventDialog(BuildContext context) async {
-    final attendanceProvider = context.read<AttendanceProvider>();
-    final colorScheme = Theme.of(context).colorScheme;
-    final eventNameController = TextEditingController();
-    final eventDescriptionController = TextEditingController();
-    DateTime selectedDate = DateTime.now();
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Add Event'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: eventNameController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Event Name',
-                        hintText: 'e.g., Youth Seminar',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: eventDescriptionController,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        labelText: 'Description (Optional)',
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Event Date'),
-                      subtitle: Text(DateTimeUtils.formatDate(selectedDate)),
-                      trailing: Icon(
-                        Icons.calendar_month_rounded,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      onTap: () async {
-                        final pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                        );
-
-                        if (pickedDate != null) {
-                          setDialogState(() {
-                            selectedDate = pickedDate;
-                          });
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    final eventName = eventNameController.text.trim();
-                    if (eventName.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Event name is required')),
-                      );
-                      return;
-                    }
-
-                    await attendanceProvider.addEvent(
-                      name: eventName,
-                      description: eventDescriptionController.text,
-                      date: selectedDate,
-                      setAsCurrent: true,
-                    );
-
-                    if (context.mounted) {
-                      Navigator.pop(dialogContext);
-                    }
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
 }

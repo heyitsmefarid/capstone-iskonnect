@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:iskonnectttt/core/services/email_service.dart';
 import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/core/utils/validators.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:iskonnectttt/shared/widgets/custom_button.dart';
 import 'package:iskonnectttt/shared/widgets/custom_text_field.dart';
 
-/// Forgot-password flow:
-///   Step 1 — enter email, request a reset code (emailed via the OTP backend).
-///   Step 2 — enter the code + a new password; once the code verifies, the app
-///            writes the new password to the account.
+/// Forgot-password flow: enter your email, and Firebase Auth sends a
+/// password-reset link. The new password is set on Firebase's own reset page,
+/// so this screen never handles it.
+///
+/// The previous two-step design (emailed 6-digit code, then the app wrote the
+/// new password) could not work: setting another user's password needs a reset
+/// token or the Admin SDK, and its Cloud Functions endpoints were never
+/// deployed. See `AuthNotifier.sendPasswordResetEmail`.
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
 
@@ -22,93 +24,35 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 
 class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _emailFormKey = GlobalKey<FormState>();
-  final _resetFormKey = GlobalKey<FormState>();
-
   final _emailController = TextEditingController();
-  final _codeController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmController = TextEditingController();
 
-  bool _codeSent = false;
+  bool _emailSent = false;
   bool _submitting = false;
-  bool _obscurePassword = true;
-  bool _obscureConfirm = true;
   String? _error;
-  String? _info;
 
   @override
   void dispose() {
     _emailController.dispose();
-    _codeController.dispose();
-    _passwordController.dispose();
-    _confirmController.dispose();
     super.dispose();
   }
 
-  Future<void> _requestCode() async {
-    setState(() {
-      _error = null;
-      _info = null;
-    });
+  Future<void> _sendResetLink() async {
+    setState(() => _error = null);
     if (!_emailFormKey.currentState!.validate()) return;
 
     setState(() => _submitting = true);
-    final result = await EmailService.requestPasswordReset(
-      toEmail: _emailController.text.trim().toLowerCase(),
-    );
+    final error = await ref
+        .read(authStateProvider.notifier)
+        .sendPasswordResetEmail(_emailController.text.trim().toLowerCase());
     if (!mounted) return;
     setState(() {
       _submitting = false;
-      if (result.success) {
-        _codeSent = true;
-        _info = result.message;
+      if (error == null) {
+        _emailSent = true;
       } else {
-        _error = result.message;
+        _error = error;
       }
     });
-  }
-
-  Future<void> _submitReset() async {
-    setState(() {
-      _error = null;
-      _info = null;
-    });
-    if (!_resetFormKey.currentState!.validate()) return;
-
-    setState(() => _submitting = true);
-    // 1) Verify the emailed code with the OTP backend.
-    final verify = await EmailService.verifyCode(
-      toEmail: _emailController.text.trim().toLowerCase(),
-      code: _codeController.text.trim(),
-    );
-    if (!mounted) return;
-    if (!verify.success) {
-      setState(() {
-        _submitting = false;
-        _error = verify.message;
-      });
-      return;
-    }
-
-    // 2) Code is valid — set the new password on the matching account.
-    final ok = await ref.read(authStateProvider.notifier).resetPasswordByEmail(
-          _emailController.text.trim().toLowerCase(),
-          _passwordController.text,
-        );
-    if (!mounted) return;
-    setState(() => _submitting = false);
-
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password reset successfully. Please sign in.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      context.go('/login');
-    } else {
-      setState(() => _error = 'No account was found for that email address.');
-    }
   }
 
   @override
@@ -147,8 +91,10 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   color: AppColors.primary.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.lock_reset_rounded,
+                child: Icon(
+                  _emailSent
+                      ? Icons.mark_email_read_rounded
+                      : Icons.lock_reset_rounded,
                   size: 36,
                   color: AppColors.primary,
                 ),
@@ -156,7 +102,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 20),
             Text(
-              _codeSent ? 'Reset Your Password' : 'Forgot Your Password?',
+              _emailSent ? 'Check Your Email' : 'Forgot Your Password?',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 22,
@@ -166,9 +112,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _codeSent
-                  ? 'Enter the 6-digit code we sent to your email and choose a new password.'
-                  : 'Enter your account email and we\'ll send you a reset code.',
+              _emailSent
+                  ? 'If an account exists for that address, we\'ve sent it a '
+                      'password-reset link. Open the link to choose a new '
+                      'password, then come back and sign in.'
+                  : 'Enter your account email and we\'ll send you a link to '
+                      'reset your password.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 14,
@@ -179,110 +128,33 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             const SizedBox(height: 24),
 
             if (_error != null) _banner(_error!, isError: true),
-            if (_info != null) _banner(_info!, isError: false),
 
-            // ── Step 1: request code ──────────────────────────────────────
-            Form(
-              key: _emailFormKey,
-              child: CustomTextField(
-                controller: _emailController,
-                label: 'Email Address',
-                hint: 'Enter your email',
-                prefixIcon: Icons.email_outlined,
-                keyboardType: TextInputType.emailAddress,
-                validator: Validators.email,
-                enabled: !_codeSent,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            if (!_codeSent)
-              GradientButton(
-                text: 'Send Reset Code',
-                onPressed: _requestCode,
-                isLoading: _submitting,
-              ),
-
-            // ── Step 2: enter code + new password ─────────────────────────
-            if (_codeSent) ...[
+            // Hidden once the link is on its way: there is nothing left to do
+            // in the app, so keeping the field would invite a pointless resend.
+            if (!_emailSent) ...[
               Form(
-                key: _resetFormKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    CustomTextField(
-                      controller: _codeController,
-                      label: '6-Digit Code',
-                      hint: '••••••',
-                      prefixIcon: Icons.pin_outlined,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(6),
-                      ],
-                      validator: (v) => (v == null || v.trim().length != 6)
-                          ? 'Enter the 6-digit code'
-                          : null,
-                    ),
-                    const SizedBox(height: 16),
-                    CustomTextField(
-                      controller: _passwordController,
-                      label: 'New Password',
-                      hint: 'Min 8 chars, upper, lower, number & symbol',
-                      prefixIcon: Icons.lock_outline,
-                      obscureText: _obscurePassword,
-                      validator: Validators.strongPassword,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          size: 20,
-                          color: AppColors.textSecondary,
-                        ),
-                        onPressed: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    CustomTextField(
-                      controller: _confirmController,
-                      label: 'Confirm New Password',
-                      hint: 'Re-enter your new password',
-                      prefixIcon: Icons.lock_outline,
-                      obscureText: _obscureConfirm,
-                      validator: (v) => Validators.confirmPassword(
-                        v,
-                        _passwordController.text,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscureConfirm
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          size: 20,
-                          color: AppColors.textSecondary,
-                        ),
-                        onPressed: () =>
-                            setState(() => _obscureConfirm = !_obscureConfirm),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    GradientButton(
-                      text: 'Reset Password',
-                      onPressed: _submitReset,
-                      isLoading: _submitting,
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: _submitting ? null : _requestCode,
-                      child: const Text('Resend Code'),
-                    ),
-                  ],
+                key: _emailFormKey,
+                child: CustomTextField(
+                  controller: _emailController,
+                  label: 'Email Address',
+                  hint: 'Enter your email',
+                  prefixIcon: Icons.email_outlined,
+                  keyboardType: TextInputType.emailAddress,
+                  validator: Validators.email,
                 ),
               ),
-            ],
+              const SizedBox(height: 16),
+              GradientButton(
+                text: 'Send Reset Link',
+                onPressed: _sendResetLink,
+                isLoading: _submitting,
+              ),
+            ] else
+              _banner(
+                'Reset link sent to ${_emailController.text.trim().toLowerCase()}. '
+                'It may take a minute to arrive — remember to check your spam folder.',
+                isError: false,
+              ),
 
             const SizedBox(height: 16),
             CustomButton(

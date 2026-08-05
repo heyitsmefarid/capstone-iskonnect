@@ -619,10 +619,48 @@ class _FlippableIdCardState extends State<_FlippableIdCard> with SingleTickerPro
             transform: Matrix4.identity()
               ..setEntry(3, 2, 0.001) // perspective
               ..rotateY(displayAngle),
-            child: showFront ? widget.front : widget.back,
+            // Framed inside the Transform so the border rotates with the card;
+            // outside it, the frame would sit still while the card turned
+            // within it. Border/radius/shadow deliberately match
+            // _ScholarshipIdCard so the templated and fallback cards read as
+            // the same object.
+            child: _IdCardFrame(child: showFront ? widget.front : widget.back),
           );
         },
       ),
+    );
+  }
+}
+
+/// The physical-card frame shared by both faces of the templated ID: a square
+/// navy edge (no corner rounding — deliberately a plain box) and a drop shadow.
+///
+/// Container (rather than DecoratedBox) is deliberate: BoxDecoration reports
+/// the border's thickness as padding, so Container insets the child by it and
+/// the edge stays visible instead of being painted over by the card's
+/// full-bleed background image.
+class _IdCardFrame extends StatelessWidget {
+  final Widget child;
+
+  const _IdCardFrame({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: _idNavy, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: _idNavy.withValues(alpha: 0.28),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      // No borderRadius, so this clips the background image to a sharp
+      // rectangle flush with the border.
+      clipBehavior: Clip.hardEdge,
+      child: child,
     );
   }
 }

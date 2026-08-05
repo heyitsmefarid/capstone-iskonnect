@@ -3,11 +3,15 @@ import footerUrl from '../assets/report-letterhead-footer.png';
 
 // Aspect ratios (height / width) of the two banner images, extracted
 // pixel-for-pixel from the CED letterhead PDF (a portrait Letter page).
-// Reports export landscape to fit wide tables, so these bands are scaled
-// UNIFORMLY (same factor on both axes) to fill the page width — this keeps
-// the round seals circular instead of stretching them into ovals.
 const HEADER_ASPECT = 328 / 1708;
 const FOOTER_ASPECT = 80 / 796;
+
+// Physical width (mm) of the portrait Letter page the banner images were
+// captured from. Band heights are derived from THIS fixed width rather
+// than the doc's own page width, so the bands keep the CED template's true
+// physical thickness even on pages narrower or wider than a portrait Letter
+// page (e.g. a report that ends up exporting landscape for a wide table).
+const TEMPLATE_PAGE_WIDTH_MM = 215.9;
 
 let cachedImages = null;
 
@@ -38,13 +42,13 @@ export function loadLetterheadImages() {
   return cachedImages;
 }
 
-/** Header/footer band heights (in the doc's page units) for the doc's current page width. */
+/** Header/footer band heights (in the doc's page units), fixed to the template's physical size. */
 export function getLetterheadLayout(doc) {
   const pageWidth = doc.internal.pageSize.getWidth();
   return {
     pageWidth,
-    headerHeight: pageWidth * HEADER_ASPECT,
-    footerHeight: pageWidth * FOOTER_ASPECT,
+    headerHeight: TEMPLATE_PAGE_WIDTH_MM * HEADER_ASPECT,
+    footerHeight: TEMPLATE_PAGE_WIDTH_MM * FOOTER_ASPECT,
   };
 }
 

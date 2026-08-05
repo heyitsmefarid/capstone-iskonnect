@@ -25,29 +25,20 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  CheckSquare,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
-import { fetchRequirements, getApplicationKey, reviewRequirement } from '../services/backendApi';
 import { downloadBfcspFormPdf, toBfcspFields } from '../utils/bfcspApplicationForm';
 import { fetchBfcspApplication } from '../services/scholarshipApplications';
 import { generateApplicationFormPdf } from '../services/backendApi';
-
-const REQUIREMENTS_RUBRIC = [
-  { label: 'Complete & Organized', points: 20, description: 'All requirements submitted on time; complete, accurate, and properly organized' },
-  { label: 'Complete but Slightly Lacking', points: 15, description: 'All requirements submitted but with minor errors or formatting issues' },
-  { label: 'Incomplete (Minor)', points: 10, description: 'Missing 1-2 minor requirements or with noticeable inconsistencies' },
-  { label: 'Incomplete (Major)', points: 5, description: 'Several missing or incorrect documents' },
-  { label: 'Non-compliant', points: 0, description: 'Failed to submit majority of required documents' },
-];
-
-const ECONOMIC_RUBRIC = [
-  { label: 'Highly Disadvantaged', points: 30, cedula: '₱5 – ₱150', electric: '₱500 and below', description: 'Very low declared income; minimal electricity use; 4+ dependents; irregular/no stable income' },
-  { label: 'Disadvantaged', points: 25, cedula: '₱151 – ₱500', electric: '₱501 – ₱1,000', description: 'Low declared income; low consumption; 3-4 dependents; limited financial capacity' },
-  { label: 'Moderately Disadvantaged', points: 20, cedula: '₱501 – ₱1,000', electric: '₱1,001 – ₱2,000', description: 'Modest declared income; average consumption; 1-2 dependents' },
-  { label: 'Slightly Disadvantaged', points: 15, cedula: '₱1,001 – ₱2,000', electric: '₱2,001 – ₱3,500', description: 'Stable income; above-average consumption; 1-2 dependents' },
-  { label: 'Financially Capable', points: 10, cedula: 'Above ₱2,000', electric: 'Above ₱3,500', description: 'Higher declared income; high consumption; few or no dependents' },
-];
+import { matchesSearch, matchesExact } from '../utils/filtering';
+import {
+  rubricMaxPoints,
+  rubricColor,
+  computeTotalScore as computeTotalScoreFromRubric,
+} from '../utils/evaluationRubric';
+import { promptScore, promptRubricLevel } from '../utils/scoreDialogs';
 
 const REQUIREMENTS_LIST = [
   { key: 'applicationForm', label: 'Duly Accomplished Scholarship Application Form (provided by the City Education Department)' },
@@ -71,7 +62,18 @@ const hasSubmittedApplicationForm = (applicant) =>
 const SCHOLAR_STATUSES = ['approved', 'active', 'on-hold', 'graduated', 'terminated'];
 
 export default function Applications() {
-  const { applicants, schools, systemSettings, addApplicant, updateApplicant, deleteApplicant, bulkDeleteApplicants, bulkImportApplicants } = useApp();
+  const { applicants, catalogSchools, catalogPrograms, addApplicant, updateApplicant, deleteApplicant, bulkDeleteApplicants, bulkImportApplicants, evaluationRubric } = useApp();
+  const REQUIREMENTS_RUBRIC = evaluationRubric.requirementsRubric;
+  const ECONOMIC_RUBRIC = evaluationRubric.economicRubric;
+  // Admin-added scoring categories beyond the three built-in ones —
+  // Administration > System Settings > Evaluation Criteria.
+  const CUSTOM_CRITERIA = evaluationRubric.customCriteria || [];
+  // Top row of each rubric is its highest-scoring level by convention — that
+  // value doubles as the category's weight (e.g. a top score of 20 means this
+  // category is worth 20% of the total), so there is nothing else to configure
+  // separately for these two headers.
+  const requirementsMaxPoints = rubricMaxPoints(REQUIREMENTS_RUBRIC);
+  const economicMaxPoints = rubricMaxPoints(ECONOMIC_RUBRIC);
   const { onMenuClick } = useOutletContext() || {};
   const SCHOLARSHIP_CAP = 25000;
 
@@ -80,26 +82,43 @@ export default function Applications() {
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
-  const computeReflectedAmount = (tuitionFee) => {
+  // Caps tuition at the SPECIFIC program's configured Tuition Cap (from the
+  // real School/Program catalog managed in System Settings) when a matching
+  // program is known, falling back to the flat SCHOLARSHIP_CAP otherwise —
+  // mirrors AppContext.jsx's resolvePerSemGrant so the two never disagree.
+  const computeReflectedAmount = (tuitionFee, school, program) => {
     const normalized = Math.max(0, toNumber(tuitionFee));
-    return Math.min(normalized, SCHOLARSHIP_CAP);
+    const matchedProgram =
+      catalogPrograms.find((p) => p.name === program && p.school === school) ||
+      catalogPrograms.find((p) => p.name === program);
+    const cap = matchedProgram?.tuitionCap != null
+      ? Math.max(0, toNumber(matchedProgram.tuitionCap))
+      : SCHOLARSHIP_CAP;
+    return Math.min(normalized, cap);
   };
 
-  // Auto-computed combined rubric score (out of 100):
-  //   Requirements (0-20 pts = 20%) + Economic Background (0-30 pts = 30%)
-  //   + Examination (exam score 0-100 weighted at 50% => examScore * 0.5).
-  const computeTotalScore = (applicant) => {
-    const exam = toNumber(applicant?.examScore);                 // 0-100 (50%)
-    const requirements = toNumber(applicant?.requirementsScore); // 0-20  (20%)
-    const economic = toNumber(applicant?.economicScore);         // 0-30  (30%)
-    const total = requirements + economic + exam * 0.5;
-    return Math.round(total * 10) / 10; // one decimal place
+  // Applicant birth dates are stored as a human-readable string (e.g.
+  // "January 15, 2001" — see AppContext.jsx's formatBirthDate), but the
+  // native <input type="date"> below only renders a value in yyyy-MM-dd
+  // form; anything else is silently shown as blank. Reparse to that shape
+  // here so the field actually displays.
+  const toDateInputValue = (value) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   };
+
+  // Auto-computed combined rubric score (out of 100) — see
+  // utils/evaluationRubric.js for the formula (Requirements + Economic, each
+  // scaled from the rubric's own point scale onto its weight, + Examination
+  // weighted by examWeight). All three weights are editable in
+  // Administration > Evaluation Criteria.
+  const computeTotalScore = (applicant) => computeTotalScoreFromRubric(applicant, evaluationRubric);
   const [activeTab, setActiveTab] = useState('applications'); // applications, exams, interviews, evaluation
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSchool, setFilterSchool] = useState('');
-  const [filterSchoolYear, setFilterSchoolYear] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
   const [evalSearchTerm, setEvalSearchTerm] = useState('');
   const [evalFilterSchool, setEvalFilterSchool] = useState('');
   const [evalFilterTopScores, setEvalFilterTopScores] = useState(''); // '', '10', '25', '50', '100'
@@ -114,11 +133,9 @@ export default function Applications() {
   const [selectedApplicant, setSelectedApplicant] = useState(null);
   const [formData, setFormData] = useState(getEmptyFormData());
   const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkEvalSelectedIds, setBulkEvalSelectedIds] = useState([]);
   const [reqPreviewUrl, setReqPreviewUrl] = useState('');
   const [reqPreviewLabel, setReqPreviewLabel] = useState('');
-  const [backendRequirements, setBackendRequirements] = useState([]);
-  const [requirementsLoading, setRequirementsLoading] = useState(false);
-  const [reviewNotes, setReviewNotes] = useState({});
   const [showReqModal, setShowReqModal] = useState(false);
   const [reqModalApplicant, setReqModalApplicant] = useState(null);
   const fileInputRef = useRef(null);
@@ -176,15 +193,24 @@ export default function Applications() {
 
 
 
+  // School filter options: the eligible-schools catalog (managed in System
+  // Settings) PLUS any school that actually appears on an applicant record
+  // (covers schools not in the catalog), so every school present in the data
+  // is selectable — matches the pattern used on the Scholars/Reports pages.
+  const schoolFilterOptions = Array.from(new Set([
+    ...(catalogSchools || []).map(s => s?.name).filter(Boolean),
+    ...applicants.map(a => a?.school).filter(Boolean),
+  ])).sort((a, b) => a.localeCompare(b));
+
   const filteredApplicants = applicants.filter(applicant => {
-    const matchesSearch = 
-      `${applicant.firstName} ${applicant.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      applicant.email?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSchool = !filterSchool || applicant.school === filterSchool;
-    const matchesSchoolYear = !filterSchoolYear || applicant.schoolYear === filterSchoolYear;
+    const matchesSearchTerm = matchesSearch(
+      [`${applicant.firstName} ${applicant.lastName}`, applicant.email],
+      searchTerm
+    );
+    const matchesSchool = matchesExact(applicant.school, filterSchool);
     // Hide records that have moved on to the Scholars module.
     const isStillApplicant = !SCHOLAR_STATUSES.includes(applicant.status);
-    return matchesSearch && matchesSchool && matchesSchoolYear && isStillApplicant;
+    return matchesSearchTerm && matchesSchool && isStillApplicant;
   }).sort((a, b) => {
     const { column, direction } = appSort;
     const multiplier = direction === 'asc' ? 1 : -1;
@@ -216,7 +242,7 @@ export default function Applications() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterSchool, filterSchoolYear, filterStatus]);
+  }, [searchTerm, filterSchool]);
 
   // Reset evaluation page when filters change
   useEffect(() => {
@@ -245,14 +271,13 @@ export default function Applications() {
     setModalMode(mode);
     setReqPreviewUrl('');
     setReqPreviewLabel('');
-    setBackendRequirements([]);
-    setReviewNotes({});
     if (applicant) {
       setSelectedApplicant(applicant);
       setFormData({
         ...applicant,
+        birthDate: toDateInputValue(applicant.birthDate),
         tuitionFee: toNumber(applicant.tuitionFee),
-        amountGranted: computeReflectedAmount(applicant.tuitionFee),
+        amountGranted: computeReflectedAmount(applicant.tuitionFee, applicant.school, applicant.program),
       });
     } else {
       setSelectedApplicant(null);
@@ -267,8 +292,6 @@ export default function Applications() {
     setFormData(getEmptyFormData());
     setReqPreviewUrl('');
     setReqPreviewLabel('');
-    setBackendRequirements([]);
-    setReviewNotes({});
   };
 
   const handleInputChange = (e) => {
@@ -279,7 +302,26 @@ export default function Applications() {
       setFormData({
         ...formData,
         tuitionFee,
-        amountGranted: computeReflectedAmount(tuitionFee),
+        amountGranted: computeReflectedAmount(tuitionFee, formData.school, formData.program),
+      });
+      return;
+    }
+
+    // Changing the school can invalidate the previously-selected program (it
+    // may belong to a different school), and either change should refresh
+    // the Reflected Scholarship Amount against the newly-matched program's
+    // own Tuition Cap, not whatever program used to be selected.
+    if (name === 'school' || name === 'program') {
+      const nextSchool = name === 'school' ? value : formData.school;
+      const programStillValid = name === 'school'
+        ? catalogPrograms.some((p) => p.name === formData.program && p.school === nextSchool)
+        : true;
+      const nextProgram = name === 'program' ? value : (programStillValid ? formData.program : '');
+      setFormData({
+        ...formData,
+        school: nextSchool,
+        program: nextProgram,
+        amountGranted: computeReflectedAmount(formData.tuitionFee, nextSchool, nextProgram),
       });
       return;
     }
@@ -392,6 +434,66 @@ export default function Applications() {
   };
 
 
+  const handleBulkApprove = async () => {
+    if (bulkEvalSelectedIds.length === 0) return;
+    const selected = applicants.filter(a => bulkEvalSelectedIds.includes(a.id));
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const nameList = selected.map(a => `• ${esc(a.lastName)}, ${esc(a.firstName)}`).join('<br>');
+    const result = await Swal.fire({
+      title: `Approve ${bulkEvalSelectedIds.length} Applicant${bulkEvalSelectedIds.length > 1 ? 's' : ''} as City Scholars?`,
+      html: `<div style="text-align:left;max-height:200px;overflow-y:auto;padding:8px 0;font-size:0.9rem;line-height:1.8">${nameList}</div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: 'var(--success)',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, Approve All',
+      cancelButtonText: 'Cancel',
+    });
+    if (!result.isConfirmed) return;
+    await Promise.all(selected.map(a => updateApplicant(a.id, { status: 'approved' })));
+    setBulkEvalSelectedIds([]);
+    Swal.fire({
+      title: 'Approved!',
+      text: `${selected.length} applicant${selected.length > 1 ? 's have' : ' has'} been approved as City Scholars.`,
+      icon: 'success',
+      timer: 2500,
+      showConfirmButton: false,
+    });
+  };
+
+  const handleBulkReject = async () => {
+    if (bulkEvalSelectedIds.length === 0) return;
+    const selected = applicants.filter(a => bulkEvalSelectedIds.includes(a.id));
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const nameList = selected.map(a => `• ${esc(a.lastName)}, ${esc(a.firstName)}`).join('<br>');
+    const result = await Swal.fire({
+      title: `Reject ${bulkEvalSelectedIds.length} Applicant${bulkEvalSelectedIds.length > 1 ? 's' : ''}?`,
+      html: `<div style="text-align:left;max-height:160px;overflow-y:auto;padding:8px 0;font-size:0.9rem;line-height:1.8;margin-bottom:8px">${nameList}</div><p style="color:#ef4444;font-weight:600;text-align:center;margin:0">Please provide a reason for rejection:</p>`,
+      input: 'textarea',
+      inputLabel: 'Reason for Rejection',
+      inputPlaceholder: 'Enter detailed reason for rejection...',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: 'var(--danger)',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Yes, Reject All',
+      cancelButtonText: 'Cancel',
+      inputValidator: (value) => {
+        if (!value || !value.trim()) return 'You must provide a reason for rejection!';
+      },
+    });
+    if (!result.isConfirmed) return;
+    await Promise.all(selected.map(a => updateApplicant(a.id, { status: 'rejected', rejectionReason: result.value })));
+    setBulkEvalSelectedIds([]);
+    Swal.fire({
+      title: 'Rejected!',
+      text: `${selected.length} application${selected.length > 1 ? 's have' : ' has'} been rejected.`,
+      icon: 'success',
+      timer: 2500,
+      showConfirmButton: false,
+    });
+  };
+
   const handleExcelImport = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -417,7 +519,9 @@ export default function Applications() {
           program: row['Program'] || row['program'] || '',
           tuitionFee: toNumber(row['Tuition Fee'] || row['tuitionFee']),
           amountGranted: computeReflectedAmount(
-            row['Tuition Fee'] || row['tuitionFee']
+            row['Tuition Fee'] || row['tuitionFee'],
+            row['School'] || row['school'] || '',
+            row['Program'] || row['program'] || ''
           ),
           yearLevel: parseInt(row['Year Level'] || row['yearLevel']) || 1,
           gender: row['Gender'] || row['gender'] || '',
@@ -554,71 +658,6 @@ export default function Applications() {
     requirement => formData.requirements?.[requirement.key]
   );
 
-  useEffect(() => {
-    if (!showModal || modalMode !== 'view' || !selectedApplicant) {
-      return;
-    }
-
-    let active = true;
-    const applicationId = getApplicationKey(selectedApplicant);
-
-    setRequirementsLoading(true);
-    fetchRequirements({ applicationId, userId: String(selectedApplicant.id) })
-      .then((response) => {
-        if (!active) return;
-        setBackendRequirements(response?.requirements || []);
-      })
-      .catch(() => {
-        if (!active) return;
-        setBackendRequirements([]);
-      })
-      .finally(() => {
-        if (active) {
-          setRequirementsLoading(false);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [showModal, modalMode, selectedApplicant]);
-
-  const handleBackendReview = async (requirementId, status) => {
-    if (!selectedApplicant) return;
-
-    const applicationId = getApplicationKey(selectedApplicant);
-    const note = reviewNotes[requirementId] || '';
-
-    try {
-      const response = await reviewRequirement({
-        applicationId,
-        requirementId,
-        status,
-        reviewNotes: note,
-      });
-
-      setBackendRequirements((current) => current.map((item) => (
-        item.id === requirementId
-          ? { ...item, status: response?.status || status, reviewNotes: note, reviewedBy: 'admin' }
-          : item
-      )));
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Requirement Updated',
-        text: `Requirement marked as ${status.replace('_', ' ')}.`,
-        timer: 1500,
-        showConfirmButton: false,
-      });
-    } catch (error) {
-      Swal.fire({
-        icon: 'error',
-        title: 'Update Failed',
-        text: error.message || 'Unable to update requirement status.',
-      });
-    }
-  };
-
   return (
     <div className="page applications-page">
       <Header 
@@ -670,29 +709,9 @@ export default function Applications() {
                 onChange={(e) => setFilterSchool(e.target.value)}
               >
                 <option value="">All Schools</option>
-                {schools.map(school => (
-                  <option key={school.id} value={school.name}>{school.name}</option>
+                {schoolFilterOptions.map(name => (
+                  <option key={name} value={name}>{name}</option>
                 ))}
-              </select>
-              <select
-                className="filter-select"
-                value={filterSchoolYear}
-                onChange={(e) => setFilterSchoolYear(e.target.value)}
-              >
-                <option value="">All School Years</option>
-                <option value="2024-2025">2024-2025</option>
-                <option value="2025-2026">2025-2026</option>
-                <option value="2026-2027">2026-2027</option>
-                <option value="2027-2028">2027-2028</option>
-              </select>
-              <select
-                className="filter-select"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-              >
-                <option value="">All Status</option>
-                <option value="complete">Complete</option>
-                <option value="incomplete">Incomplete</option>
               </select>
             </div>
           </div>
@@ -1163,7 +1182,7 @@ export default function Applications() {
                       disabled={modalMode === 'view'}
                     >
                       <option value="">Select School</option>
-                      {schools.map(school => (
+                      {catalogSchools.map(school => (
                         <option key={school.id} value={school.name}>{school.name}</option>
                       ))}
                     </select>
@@ -1178,9 +1197,11 @@ export default function Applications() {
                       disabled={modalMode === 'view'}
                     >
                       <option value="">Select Program</option>
-                      {(systemSettings?.academicPrograms || []).map((program) => (
-                        <option key={program} value={program}>{program}</option>
-                      ))}
+                      {catalogPrograms
+                        .filter((program) => program.school === formData.school)
+                        .map((program) => (
+                          <option key={program.id} value={program.name}>{program.name}</option>
+                        ))}
                     </select>
                   </div>
                   <div className="form-group">
@@ -1200,7 +1221,7 @@ export default function Applications() {
                     <input
                       type="number"
                       name="amountGranted"
-                      value={computeReflectedAmount(formData.tuitionFee)}
+                      value={computeReflectedAmount(formData.tuitionFee, formData.school, formData.program)}
                       readOnly
                       disabled
                     />
@@ -1325,69 +1346,6 @@ export default function Applications() {
                     <p className="no-submitted-requirements">No submitted requirements found for this applicant.</p>
                   )}
 
-                  <div style={{ marginTop: '1.5rem' }}>
-                    <h3>Live Review Queue</h3>
-                    <p className="input-hint">
-                      Review statuses are fetched from the backend requirement tracker and can be updated here.
-                    </p>
-
-                    {requirementsLoading ? (
-                      <p>Loading requirement records...</p>
-                    ) : backendRequirements.length > 0 ? (
-                      <div className="submitted-requirements-list">
-                        {backendRequirements.map((requirement) => (
-                          <div key={requirement.id} className="submitted-requirement-item" style={{ flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                            <div style={{ flex: 1, minWidth: 220 }}>
-                              <strong>{requirement.requirementType || requirement.fileName || requirement.id}</strong>
-                              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                                Status: {requirement.status || 'submitted'}
-                              </div>
-                              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                                {requirement.fileName || 'No file name'}
-                              </div>
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                              <input
-                                type="text"
-                                placeholder="Review notes"
-                                value={reviewNotes[requirement.id] || ''}
-                                onChange={(e) => setReviewNotes((current) => ({
-                                  ...current,
-                                  [requirement.id]: e.target.value,
-                                }))}
-                                style={{ minWidth: 200 }}
-                              />
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-secondary"
-                                onClick={() => handleBackendReview(requirement.id, 'under_review')}
-                              >
-                                Under Review
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-primary"
-                                onClick={() => handleBackendReview(requirement.id, 'approved')}
-                              >
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-danger"
-                                onClick={() => handleBackendReview(requirement.id, 'rejected')}
-                              >
-                                Reject
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="no-submitted-requirements">No live backend requirements found for this application.</p>
-                    )}
-                  </div>
-
                   {reqPreviewUrl && (
                     <div style={{
                       marginTop: '1rem', padding: '1rem',
@@ -1452,8 +1410,8 @@ export default function Applications() {
                       onChange={(e) => setEvalFilterSchool(e.target.value)}
                     >
                       <option value="">All Schools</option>
-                      {schools.map(school => (
-                        <option key={school.id} value={school.name}>{school.name}</option>
+                      {schoolFilterOptions.map(name => (
+                        <option key={name} value={name}>{name}</option>
                       ))}
                     </select>
                     <select
@@ -1477,11 +1435,12 @@ export default function Applications() {
                     <h3 style={{ margin: '0 0 1rem 0' }}>Applicant Evaluation & Approval</h3>
 
                     {/* Rubrics Reference */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '1rem' }}>
-                      {/* Completion of Requirements (20%) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginBottom: '1rem' }}>
+                      {/* Completion of Requirements — hidden when "removed" (weight set to 0) in Evaluation Criteria */}
+                      {evaluationRubric.requirementsWeight > 0 && (
                       <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden' }}>
                         <div style={{ padding: '10px 14px', background: 'rgba(45,149,150,0.15)', borderBottom: '1px solid var(--border-color)' }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#4db6ac' }}>COMPLETION OF REQUIREMENTS (20%)</span>
+                          <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#4db6ac' }}>COMPLETION OF REQUIREMENTS ({evaluationRubric.requirementsWeight}%)</span>
                         </div>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
                           <thead>
@@ -1494,7 +1453,7 @@ export default function Applications() {
                           <tbody>
                             {REQUIREMENTS_RUBRIC.map((r, i) => (
                               <tr key={r.points} style={{ borderBottom: i < REQUIREMENTS_RUBRIC.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
-                                <td style={{ padding: '6px 10px', fontWeight: 600, color: r.points === 20 ? '#22c55e' : r.points === 15 ? '#3b82f6' : r.points === 10 ? '#f59e0b' : r.points === 5 ? '#f97316' : '#ef4444', whiteSpace: 'nowrap' }}>{r.label}</td>
+                                <td style={{ padding: '6px 10px', fontWeight: 600, color: rubricColor(REQUIREMENTS_RUBRIC, r.points), whiteSpace: 'nowrap' }}>{r.label}</td>
                                 <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>{r.points}</td>
                                 <td style={{ padding: '6px 10px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{r.description}</td>
                               </tr>
@@ -1502,11 +1461,13 @@ export default function Applications() {
                           </tbody>
                         </table>
                       </div>
+                      )}
 
-                      {/* Economic Background (30%) */}
+                      {/* Economic Background — hidden when "removed" (weight set to 0) */}
+                      {evaluationRubric.economicWeight > 0 && (
                       <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden' }}>
                         <div style={{ padding: '10px 14px', background: 'rgba(139,92,246,0.12)', borderBottom: '1px solid var(--border-color)' }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#a78bfa' }}>ECONOMIC BACKGROUND (30%)</span>
+                          <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#a78bfa' }}>ECONOMIC BACKGROUND ({evaluationRubric.economicWeight}%)</span>
                         </div>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
                           <thead>
@@ -1520,7 +1481,7 @@ export default function Applications() {
                           <tbody>
                             {ECONOMIC_RUBRIC.map((r, i) => (
                               <tr key={r.points} style={{ borderBottom: i < ECONOMIC_RUBRIC.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
-                                <td style={{ padding: '6px 10px', fontWeight: 600, color: r.points === 30 ? '#22c55e' : r.points === 25 ? '#3b82f6' : r.points === 20 ? '#f59e0b' : r.points === 15 ? '#f97316' : '#ef4444', whiteSpace: 'nowrap' }}>{r.label}</td>
+                                <td style={{ padding: '6px 10px', fontWeight: 600, color: rubricColor(ECONOMIC_RUBRIC, r.points), whiteSpace: 'nowrap' }}>{r.label}</td>
                                 <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>{r.points}</td>
                                 <td style={{ padding: '6px 10px', color: 'var(--text-secondary)' }}>{r.cedula}</td>
                                 <td style={{ padding: '6px 10px', color: 'var(--text-secondary)' }}>{r.electric}</td>
@@ -1529,15 +1490,55 @@ export default function Applications() {
                           </tbody>
                         </table>
                       </div>
+                      )}
 
-                      {/* Examination (50%) */}
+                      {/* Examination — hidden when "removed" (weight set to 0) */}
+                      {evaluationRubric.examWeight > 0 && (
                       <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <div style={{ textAlign: 'center', padding: '24px 16px' }}>
                           <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#fbbf24', letterSpacing: '0.08em', marginBottom: '8px' }}>EXAMINATION</div>
-                          <div style={{ fontWeight: 800, fontSize: '2.5rem', color: '#fbbf24', lineHeight: 1 }}>50%</div>
+                          <div style={{ fontWeight: 800, fontSize: '2.5rem', color: '#fbbf24', lineHeight: 1 }}>{evaluationRubric.examWeight}%</div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '8px' }}>of total score</div>
                         </div>
                       </div>
+                      )}
+
+                      {/* Admin-added custom criteria (Administration > Evaluation Criteria) */}
+                      {CUSTOM_CRITERIA.map((c) => (
+                        c.type === 'rubric' ? (
+                          <div key={c.id} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden' }}>
+                            <div style={{ padding: '10px 14px', background: 'rgba(94,234,212,0.12)', borderBottom: '1px solid var(--border-color)' }}>
+                              <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#5eead4' }}>{c.name.toUpperCase()} ({c.weight}%)</span>
+                            </div>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                              <thead>
+                                <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Level</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>Pts</th>
+                                  <th style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Description</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {c.rubric.map((r, i) => (
+                                  <tr key={r.points} style={{ borderBottom: i < c.rubric.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                                    <td style={{ padding: '6px 10px', fontWeight: 600, color: rubricColor(c.rubric, r.points), whiteSpace: 'nowrap' }}>{r.label}</td>
+                                    <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 700, color: 'var(--text-primary)' }}>{r.points}</td>
+                                    <td style={{ padding: '6px 10px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{r.description}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div key={c.id} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+                              <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#5eead4', letterSpacing: '0.08em', marginBottom: '8px' }}>{c.name.toUpperCase()}</div>
+                              <div style={{ fontWeight: 800, fontSize: '2.5rem', color: '#5eead4', lineHeight: 1 }}>{c.weight}%</div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '8px' }}>of total score</div>
+                            </div>
+                          </div>
+                        )
+                      ))}
                     </div>
                   </div>
 
@@ -1545,21 +1546,32 @@ export default function Applications() {
                     // Filter applicants for evaluation
                     let filteredEvalApplicants = applicants.filter(a => {
                       if (a.status !== 'pending') return false;
-                      
-                      const matchesSearch = 
-                        `${a.firstName} ${a.lastName}`.toLowerCase().includes(evalSearchTerm.toLowerCase()) ||
-                        a.email?.toLowerCase().includes(evalSearchTerm.toLowerCase());
-                      
-                      const matchesSchool = !evalFilterSchool || a.school === evalFilterSchool;
-                      
-                      return matchesSearch && matchesSchool;
+
+                      const matchesSearchTerm = matchesSearch(
+                        [`${a.firstName} ${a.lastName}`, a.email],
+                        evalSearchTerm
+                      );
+                      const matchesSchool = matchesExact(a.school, evalFilterSchool);
+
+                      return matchesSearchTerm && matchesSchool;
                     });
+
+                    // Top-N filter always ranks by Total Score, independent of
+                    // whichever column the table is currently display-sorted
+                    // by, so "Top 50" reliably means the 50 highest total
+                    // ratings rather than the first 50 rows of some other order.
+                    if (evalFilterTopScores) {
+                      const topN = parseInt(evalFilterTopScores, 10);
+                      filteredEvalApplicants = [...filteredEvalApplicants]
+                        .sort((a, b) => computeTotalScore(b) - computeTotalScore(a))
+                        .slice(0, topN);
+                    }
 
                     // Dynamic sorting based on selected column
                     filteredEvalApplicants = filteredEvalApplicants.sort((a, b) => {
                       const { column, direction } = evalSort;
                       const multiplier = direction === 'asc' ? 1 : -1;
-                      
+
                       switch (column) {
                         case 'name':
                           const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
@@ -1580,23 +1592,83 @@ export default function Applications() {
                       }
                     });
 
-                    // Apply top scores filter
-                    if (evalFilterTopScores) {
-                      const topN = parseInt(evalFilterTopScores);
-                      filteredEvalApplicants = filteredEvalApplicants.slice(0, topN);
-                    }
-
                     // Pagination for evaluation
                     const evalTotalPages = Math.ceil(filteredEvalApplicants.length / evalItemsPerPage);
                     const evalStartIndex = (evalCurrentPage - 1) * evalItemsPerPage;
                     const evalEndIndex = evalStartIndex + evalItemsPerPage;
                     const paginatedEvalApplicants = filteredEvalApplicants.slice(evalStartIndex, evalEndIndex);
 
+                    const allFilteredIds = filteredEvalApplicants.map(a => a.id);
+                    const allFilteredSelected = allFilteredIds.length > 0 && allFilteredIds.every(id => bulkEvalSelectedIds.includes(id));
+                    const allPageIds = paginatedEvalApplicants.map(a => a.id);
+                    const allPageSelected = allPageIds.length > 0 && allPageIds.every(id => bulkEvalSelectedIds.includes(id));
+                    const somePageSelected = allPageIds.some(id => bulkEvalSelectedIds.includes(id));
+
                     return (
                       <>
+                  {filteredEvalApplicants.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBulkEvalSelectedIds(prev =>
+                            allFilteredSelected
+                              ? prev.filter(id => !allFilteredIds.includes(id))
+                              : [...new Set([...prev, ...allFilteredIds])]
+                          );
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'transparent', color: 'var(--accent, #4db6ac)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}
+                      >
+                        <CheckSquare size={14} />
+                        {allFilteredSelected
+                          ? 'Deselect all filtered'
+                          : `Select all ${filteredEvalApplicants.length} filtered`}
+                      </button>
+                    </div>
+                  )}
+                  {bulkEvalSelectedIds.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', marginBottom: '8px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 600, color: '#22c55e', fontSize: '0.9rem' }}>
+                        {bulkEvalSelectedIds.length} applicant{bulkEvalSelectedIds.length > 1 ? 's' : ''} selected
+                      </span>
+                      <button
+                        onClick={handleBulkApprove}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
+                      >
+                        <CheckCircle size={14} /> Approve Selected
+                      </button>
+                      <button
+                        onClick={handleBulkReject}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem' }}
+                      >
+                        <XCircle size={14} /> Reject Selected
+                      </button>
+                      <button
+                        onClick={() => setBulkEvalSelectedIds([])}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.82rem' }}
+                      >
+                        <X size={13} /> Clear
+                      </button>
+                    </div>
+                  )}
                   <table className="data-table">
                     <thead>
                       <tr>
+                        <th style={{ width: '36px' }}>
+                          <input
+                            type="checkbox"
+                            checked={allPageSelected}
+                            ref={el => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setBulkEvalSelectedIds(prev => [...new Set([...prev, ...allPageIds])]);
+                              } else {
+                                setBulkEvalSelectedIds(prev => prev.filter(id => !allPageIds.includes(id)));
+                              }
+                            }}
+                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                          />
+                        </th>
                         <th>Rank</th>
                         <th onClick={() => handleEvalSort('name')} style={{ cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1610,24 +1682,33 @@ export default function Applications() {
                             <SortIcon column="school" currentSort={evalSort} />
                           </div>
                         </th>
+                        {evaluationRubric.examWeight > 0 && (
                         <th onClick={() => handleEvalSort('examScore')} style={{ cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             Exam Score
                             <SortIcon column="examScore" currentSort={evalSort} />
                           </div>
                         </th>
+                        )}
+                        {evaluationRubric.requirementsWeight > 0 && (
                         <th onClick={() => handleEvalSort('requirementsScore')} style={{ cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            Requirements (20%)
+                            Requirements ({evaluationRubric.requirementsWeight}%)
                             <SortIcon column="requirementsScore" currentSort={evalSort} />
                           </div>
                         </th>
+                        )}
+                        {evaluationRubric.economicWeight > 0 && (
                         <th onClick={() => handleEvalSort('economicScore')} style={{ cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            Economic Background (30%)
+                            Economic Background ({evaluationRubric.economicWeight}%)
                             <SortIcon column="economicScore" currentSort={evalSort} />
                           </div>
                         </th>
+                        )}
+                        {CUSTOM_CRITERIA.map((c) => (
+                          <th key={c.id}>{c.name} ({c.weight}%)</th>
+                        ))}
                         <th onClick={() => handleEvalSort('totalScore')} style={{ cursor: 'pointer' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             Total Score (100%)
@@ -1645,25 +1726,39 @@ export default function Applications() {
                         const rank = evalStartIndex + index + 1;
                         const ecoEntry = ECONOMIC_RUBRIC.find(r => r.points === economicScore);
                         const reqEntry = REQUIREMENTS_RUBRIC.find(r => r.points === requirementsScore);
-                        const ecoColor = economicScore === 30 ? '#22c55e' : economicScore === 25 ? '#3b82f6' : economicScore === 20 ? '#f59e0b' : economicScore === 15 ? '#f97316' : '#ef4444';
-                        const reqColor = requirementsScore === 20 ? '#22c55e' : requirementsScore === 15 ? '#3b82f6' : requirementsScore === 10 ? '#f59e0b' : requirementsScore === 5 ? '#f97316' : '#ef4444';
+                        const ecoColor = rubricColor(ECONOMIC_RUBRIC, economicScore);
+                        const reqColor = rubricColor(REQUIREMENTS_RUBRIC, requirementsScore);
                         // Auto-computed combined rubric score (out of 100)
                         const totalScore = computeTotalScore(applicant);
                         const isFullyScored = examScore > 0 && economicScore > 0 && requirementsScore !== null;
                         const totalColor = totalScore >= 85 ? '#22c55e' : totalScore >= 75 ? '#3b82f6' : totalScore >= 60 ? '#f59e0b' : '#ef4444';
                         
                         return (
-                          <tr key={applicant.id}>
+                          <tr key={applicant.id} style={{ background: bulkEvalSelectedIds.includes(applicant.id) ? 'rgba(34,197,94,0.06)' : undefined }}>
+                            <td style={{ width: '36px' }}>
+                              <input
+                                type="checkbox"
+                                checked={bulkEvalSelectedIds.includes(applicant.id)}
+                                onChange={e => {
+                                  setBulkEvalSelectedIds(prev =>
+                                    e.target.checked
+                                      ? [...prev, applicant.id]
+                                      : prev.filter(id => id !== applicant.id)
+                                  );
+                                }}
+                                style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                              />
+                            </td>
                             <td>
-                              <div style={{ 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
+                              <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
                                 justifyContent: 'center',
                                 width: '32px',
                                 height: '32px',
                                 borderRadius: '50%',
-                                background: rank <= 3 ? 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)' : 
-                                           rank <= 10 ? 'linear-gradient(135deg, #C0C0C0 0%, #808080 100%)' : 
+                                background: rank <= 3 ? 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)' :
+                                           rank <= 10 ? 'linear-gradient(135deg, #C0C0C0 0%, #808080 100%)' :
                                            'var(--bg-tertiary)',
                                 color: rank <= 10 ? '#fff' : 'var(--text-primary)',
                                 fontWeight: '600',
@@ -1674,12 +1769,13 @@ export default function Applications() {
                             </td>
                             <td>{applicant.lastName}, {applicant.firstName}</td>
                             <td>{applicant.school}</td>
+                            {evaluationRubric.examWeight > 0 && (
                             <td>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
                                   <div style={{ flex: 1 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                      <span style={{ 
+                                      <span style={{
                                         fontWeight: '600', 
                                         fontSize: '1rem',
                                         color: examScore >= 90 ? '#22c55e' : 
@@ -1715,21 +1811,13 @@ export default function Applications() {
                                   <button 
                                     className="btn btn-sm btn-primary"
                                     onClick={async () => {
-                                      const { value: score } = await Swal.fire({
-                                        title: 'Enter Exam Score',
-                                        input: 'number',
-                                        inputLabel: 'Score (0-100)',
-                                        inputValue: examScore > 0 ? examScore : '',
-                                        inputAttributes: { min: 0, max: 100, step: 0.1 },
-                                        showCancelButton: true,
-                                        confirmButtonColor: 'var(--primary)',
-                                        inputValidator: (value) => {
-                                          if (!value && value !== 0) return 'Please enter a score';
-                                          if (value < 0 || value > 100) return 'Score must be between 0 and 100';
-                                        },
+                                      const score = await promptScore({
+                                        title: 'Examination Score',
+                                        subtitle: `${applicant.lastName}, ${applicant.firstName}`,
+                                        current: examScore > 0 ? examScore : undefined,
                                       });
                                       if (score !== undefined) {
-                                        updateApplicant(applicant.id, { examScore: parseFloat(score) });
+                                        updateApplicant(applicant.id, { examScore: score });
                                       }
                                     }}
                                     style={{ fontSize: '0.75em', padding: '4px 8px' }}
@@ -1739,14 +1827,16 @@ export default function Applications() {
                                 </div>
                               </div>
                             </td>
+                            )}
                             {/* Requirements Score (20%) */}
+                            {evaluationRubric.requirementsWeight > 0 && (
                             <td>
                               {requirementsScore !== null ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
                                   <div style={{ flex: 1 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                                       <span style={{ fontWeight: 700, fontSize: '1rem', color: reqColor }}>{requirementsScore}</span>
-                                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>/ 20 pts</span>
+                                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>/ {requirementsMaxPoints} pts</span>
                                     </div>
                                     <div style={{ display: 'inline-block', padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600, background: `${reqColor}20`, color: reqColor }}>
                                       {reqEntry?.label || '—'}
@@ -1756,19 +1846,13 @@ export default function Applications() {
                                     className="btn btn-sm btn-secondary"
                                     style={{ fontSize: '0.72em', padding: '4px 8px' }}
                                     onClick={async () => {
-                                      const opts = {};
-                                      REQUIREMENTS_RUBRIC.forEach(r => { opts[r.points] = `${r.points} pts — ${r.label}`; });
-                                      const { value: s } = await Swal.fire({
-                                        title: 'Update Requirements Score',
-                                        input: 'select',
-                                        inputOptions: opts,
-                                        inputValue: requirementsScore ?? '',
-                                        inputPlaceholder: 'Select level',
-                                        showCancelButton: true,
-                                        confirmButtonColor: 'var(--primary)',
-                                        inputValidator: v => { if (v === '') return 'Please select a level'; },
+                                      const s = await promptRubricLevel({
+                                        title: 'Completion of Requirements',
+                                        subtitle: `${applicant.lastName}, ${applicant.firstName}`,
+                                        rubric: REQUIREMENTS_RUBRIC,
+                                        current: requirementsScore,
                                       });
-                                      if (s !== undefined) updateApplicant(applicant.id, { requirementsScore: parseInt(s) });
+                                      if (s !== undefined) updateApplicant(applicant.id, { requirementsScore: s });
                                     }}
                                   >Update</button>
                                 </div>
@@ -1777,31 +1861,27 @@ export default function Applications() {
                                   className="btn btn-sm btn-secondary"
                                   style={{ fontSize: '0.78em', padding: '6px 10px' }}
                                   onClick={async () => {
-                                    const opts = {};
-                                    REQUIREMENTS_RUBRIC.forEach(r => { opts[r.points] = `${r.points} pts — ${r.label}`; });
-                                    const { value: s } = await Swal.fire({
-                                      title: 'Score Requirements Completion',
-                                      input: 'select',
-                                      inputOptions: opts,
-                                      inputPlaceholder: 'Select level',
-                                      showCancelButton: true,
-                                      confirmButtonColor: 'var(--primary)',
-                                      inputValidator: v => { if (v === '') return 'Please select a level'; },
+                                    const s = await promptRubricLevel({
+                                      title: 'Completion of Requirements',
+                                      subtitle: `${applicant.lastName}, ${applicant.firstName}`,
+                                      rubric: REQUIREMENTS_RUBRIC,
                                     });
-                                    if (s !== undefined) updateApplicant(applicant.id, { requirementsScore: parseInt(s) });
+                                    if (s !== undefined) updateApplicant(applicant.id, { requirementsScore: s });
                                   }}
                                 >Score</button>
                               )}
                             </td>
+                            )}
 
                             {/* Economic Background (30%) */}
+                            {evaluationRubric.economicWeight > 0 && (
                             <td>
                               {economicScore > 0 ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
                                   <div style={{ flex: 1 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
                                       <span style={{ fontWeight: 700, fontSize: '1rem', color: ecoColor }}>{economicScore}</span>
-                                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>/ 30 pts</span>
+                                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>/ {economicMaxPoints} pts</span>
                                     </div>
                                     <div style={{ display: 'inline-block', padding: '2px 7px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600, background: `${ecoColor}20`, color: ecoColor }}>
                                       {ecoEntry?.label || '—'}
@@ -1816,19 +1896,14 @@ export default function Applications() {
                                     className="btn btn-sm btn-secondary"
                                     style={{ fontSize: '0.72em', padding: '4px 8px' }}
                                     onClick={async () => {
-                                      const opts = {};
-                                      ECONOMIC_RUBRIC.forEach(r => { opts[r.points] = `${r.points} pts — ${r.label}`; });
-                                      const { value: s } = await Swal.fire({
-                                        title: 'Update Economic Background',
-                                        input: 'select',
-                                        inputOptions: opts,
-                                        inputValue: economicScore || '',
-                                        inputPlaceholder: 'Select level',
-                                        showCancelButton: true,
-                                        confirmButtonColor: 'var(--primary)',
-                                        inputValidator: v => { if (!v) return 'Please select a level'; },
+                                      const s = await promptRubricLevel({
+                                        title: 'Economic Background',
+                                        subtitle: `${applicant.lastName}, ${applicant.firstName}`,
+                                        rubric: ECONOMIC_RUBRIC,
+                                        current: economicScore,
+                                        showRanges: true,
                                       });
-                                      if (s) updateApplicant(applicant.id, { economicScore: parseInt(s) });
+                                      if (s !== undefined) updateApplicant(applicant.id, { economicScore: s });
                                     }}
                                   >Update</button>
                                 </div>
@@ -1837,22 +1912,78 @@ export default function Applications() {
                                   className="btn btn-sm btn-secondary"
                                   style={{ fontSize: '0.78em', padding: '6px 10px' }}
                                   onClick={async () => {
-                                    const opts = {};
-                                    ECONOMIC_RUBRIC.forEach(r => { opts[r.points] = `${r.points} pts — ${r.label}`; });
-                                    const { value: s } = await Swal.fire({
-                                      title: 'Rate Economic Background',
-                                      input: 'select',
-                                      inputOptions: opts,
-                                      inputPlaceholder: 'Select level',
-                                      showCancelButton: true,
-                                      confirmButtonColor: 'var(--primary)',
-                                      inputValidator: v => { if (!v) return 'Please select a level'; },
+                                    const s = await promptRubricLevel({
+                                      title: 'Economic Background',
+                                      subtitle: `${applicant.lastName}, ${applicant.firstName}`,
+                                      rubric: ECONOMIC_RUBRIC,
+                                      showRanges: true,
                                     });
-                                    if (s) updateApplicant(applicant.id, { economicScore: parseInt(s) });
+                                    if (s !== undefined) updateApplicant(applicant.id, { economicScore: s });
                                   }}
                                 >Rate</button>
                               )}
                             </td>
+                            )}
+
+                            {/* Admin-added custom criteria */}
+                            {CUSTOM_CRITERIA.map((c) => {
+                              const rawScore = applicant.customCriteriaScores?.[c.id];
+                              const hasScore = rawScore !== undefined && rawScore !== null;
+                              const entryLabel = c.type === 'rubric'
+                                ? c.rubric.find(r => r.points === rawScore)?.label
+                                : null;
+                              const scoreColor = c.type === 'rubric' ? rubricColor(c.rubric, rawScore) : '#5eead4';
+
+                              const openScorePrompt = async () => {
+                                let value;
+                                const subtitle = `${applicant.lastName}, ${applicant.firstName}`;
+                                if (c.type === 'rubric') {
+                                  value = await promptRubricLevel({
+                                    title: c.name,
+                                    subtitle,
+                                    rubric: c.rubric,
+                                    current: hasScore ? rawScore : undefined,
+                                  });
+                                } else {
+                                  value = await promptScore({
+                                    title: c.name,
+                                    subtitle,
+                                    current: hasScore ? rawScore : undefined,
+                                  });
+                                }
+                                if (value !== undefined) {
+                                  updateApplicant(applicant.id, {
+                                    customCriteriaScores: { ...(applicant.customCriteriaScores || {}), [c.id]: value },
+                                  });
+                                }
+                              };
+
+                              return (
+                                <td key={c.id}>
+                                  {hasScore ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+                                      <div>
+                                        <span style={{ fontWeight: 700, fontSize: '1rem', color: scoreColor }}>{rawScore}</span>
+                                        {entryLabel && (
+                                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{entryLabel}</div>
+                                        )}
+                                      </div>
+                                      <button
+                                        className="btn btn-sm btn-secondary"
+                                        style={{ fontSize: '0.72em', padding: '4px 8px' }}
+                                        onClick={openScorePrompt}
+                                      >Update</button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      className="btn btn-sm btn-secondary"
+                                      style={{ fontSize: '0.78em', padding: '6px 10px' }}
+                                      onClick={openScorePrompt}
+                                    >Score</button>
+                                  )}
+                                </td>
+                              );
+                            })}
 
                             {/* Total Score (auto-computed, 100%) */}
                             <td>
@@ -1911,7 +2042,7 @@ export default function Applications() {
                                         <p><strong>School:</strong> ${applicant.school}</p>
                                         <p><strong>Program:</strong> ${applicant.program || 'N/A'}</p>
                                         <p><strong>Tuition Fee:</strong> PHP ${(applicant.tuitionFee || 0).toLocaleString()}</p>
-                                        <p><strong>Reflected Scholarship Amount:</strong> PHP ${computeReflectedAmount(applicant.tuitionFee).toLocaleString()}</p>
+                                        <p><strong>Reflected Scholarship Amount:</strong> PHP ${computeReflectedAmount(applicant.tuitionFee, applicant.school, applicant.program).toLocaleString()}</p>
                                         <p><strong>Exam Score:</strong> ${examScore}/100</p>
                                         <p><strong>Requirements Score:</strong> ${requirementsScore !== null ? requirementsScore + '/20 pts — ' + (reqEntry?.label || '') : 'Not scored'}</p>
                                         <p><strong>Economic Background:</strong> ${economicScore > 0 ? economicScore + '/30 pts — ' + (ecoEntry?.label || '') : 'Not rated'}</p>
@@ -1931,7 +2062,7 @@ export default function Applications() {
                                   if (result.isConfirmed) {
                                     updateApplicant(applicant.id, {
                                       status: 'active',
-                                      amountGranted: computeReflectedAmount(applicant.tuitionFee),
+                                      amountGranted: computeReflectedAmount(applicant.tuitionFee, applicant.school, applicant.program),
                                     });
                                     Swal.fire(
                                       'Approved!', 

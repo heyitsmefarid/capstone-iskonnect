@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Protects resources that are only ever referenced from Dart at runtime.
+
+  The release build runs Android's resource shrinker, which determines
+  reachability from Java/Kotlin and XML only. `ic_stat_notification` is named
+  as the string '@drawable/ic_stat_notification' inside
+  announcement_notifications_native.dart and event_reminder_service.dart, which
+  the shrinker cannot see, so it reported
+
+      @com.example.iskonnect2:drawable/ic_stat_notification : reachable=false
+
+  and stripped it from the APK. flutter_local_notifications then had no icon to
+  resolve for its status-bar notifications.
+
+  ic_launcher survives without help because AndroidManifest.xml references it.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_notification" />

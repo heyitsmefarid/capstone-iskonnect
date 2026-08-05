@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iskonnectttt/core/models/attendance_model.dart';
+import 'package:iskonnectttt/core/models/event_model.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:iskonnectttt/core/services/scholar_firestore_service.dart';
+import 'package:iskonnectttt/features/events/providers/events_provider.dart';
+import 'package:iskonnectttt/features/grades/providers/grades_provider.dart';
 
 class AttendanceNotifier extends StateNotifier<List<AttendanceModel>> {
   AttendanceNotifier() : super(const []) {
@@ -102,6 +105,22 @@ final attendanceProvider =
       return AttendanceNotifier();
     });
 
+// Events scheduled for the currently active term only — an event (and its
+// attendance) from a semester that has already ended shouldn't keep counting
+// once a new term has started. Shared by attendanceSummaryProvider and
+// currentTermAttendanceProvider below so both reset the same way.
+final _currentTermEventsProvider = Provider<List<EventModel>>((ref) {
+  final activeAsync = ref.watch(activeAcademicPeriodProvider);
+  return activeAsync.maybeWhen(
+    data: (active) => ref
+        .watch(eventsProvider)
+        .where((e) =>
+            e.schoolYear == active.schoolYear && e.semester == active.semester)
+        .toList(),
+    orElse: () => const [],
+  );
+});
+
 final attendanceSummaryProvider = Provider<AttendanceSummary>((ref) {
   final student = ref.watch(currentStudentProvider);
 
@@ -110,5 +129,30 @@ final attendanceSummaryProvider = Provider<AttendanceSummary>((ref) {
     return AttendanceSummary(totalActivities: 0, present: 0, absent: 0);
   }
 
-  return ref.watch(attendanceProvider.notifier).summary;
+  final termEvents = ref.watch(_currentTermEventsProvider);
+  final allAttendance = ref.watch(attendanceProvider);
+  var present = 0;
+  for (final event in termEvents) {
+    final record = allAttendance.where((a) => a.activityName == event.name);
+    if (record.isNotEmpty && record.first.isPresent) present++;
+  }
+
+  return AttendanceSummary(
+    totalActivities: termEvents.length,
+    present: present,
+    absent: termEvents.length - present,
+  );
+});
+
+/// Activity History entries for the currently active term's events only —
+/// same reset-per-semester rule as attendanceSummaryProvider above, applied
+/// to the actual list the Attendance screen renders (previously showed every
+/// attendance record ever, across every past semester).
+final currentTermAttendanceProvider = Provider<List<AttendanceModel>>((ref) {
+  final termEventNames =
+      ref.watch(_currentTermEventsProvider).map((e) => e.name).toSet();
+  return ref
+      .watch(attendanceProvider)
+      .where((a) => termEventNames.contains(a.activityName))
+      .toList();
 });

@@ -17,9 +17,10 @@ const ACTION_COLORS = {
   STATUS_CHANGE: '#f97316',
   PASSWORD_RESET: '#ec4899',
   EXPORT: '#14b8a6',
+  RESTORE: '#0ea5e9',
 };
 
-const ACTION_OPTIONS = ['', 'LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'APPROVE', 'REJECT', 'STATUS_CHANGE', 'PASSWORD_RESET', 'EXPORT'];
+const ACTION_OPTIONS = ['', 'LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'APPROVE', 'REJECT', 'STATUS_CHANGE', 'PASSWORD_RESET', 'EXPORT', 'RESTORE'];
 
 export default function AuditLogs() {
   const { onMenuClick } = useOutletContext() || {};

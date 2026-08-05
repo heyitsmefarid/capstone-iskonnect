@@ -69,7 +69,7 @@ class IskonnectApp extends StatelessWidget {
       child: Consumer<SettingsProvider>(
         builder: (context, settingsProvider, _) {
           return MaterialApp(
-            title: 'ISKONNECT',
+            title: 'Iskonnect Scanner',
             debugShowCheckedModeBanner: false,
 
             // Theme configuration
@@ -184,10 +184,18 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                         ],
                       ),
-                      child: Icon(
-                        Icons.qr_code_scanner_rounded,
-                        size: 64,
-                        color: AppColors.primary,
+                      // The real QR Scanner logo, replacing the generic
+                      // Material scanner glyph. Clipped to the container's
+                      // radius so the artwork cannot overlap the border.
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(27),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Image.asset(
+                            'assets/images/app_logo.png',
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 32),

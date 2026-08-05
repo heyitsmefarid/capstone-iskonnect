@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -35,6 +37,14 @@ class IdCardBack extends ConsumerWidget {
         builder: (context, constraints) {
           final w = constraints.maxWidth;
           final h = constraints.maxHeight;
+          // One pixel value used for both QR dimensions — see the QR block below.
+          final qrSide = math.min(w * 0.30, h * 0.50);
+          // Info column. Narrowed from 0.40/0.58 to buy the QR room on the
+          // left, but kept symmetric about the same centre (0.69) so the values
+          // stay aligned under the ADDRESS / DATE OF BIRTH labels printed on
+          // the background, which are themselves centred at ~0.688.
+          final colLeft = w * 0.46;
+          final colWidth = w * 0.46;
           final hasEmergencyContact = (student.emergencyContactName?.isNotEmpty ?? false) &&
               (student.emergencyContactPhone?.isNotEmpty ?? false);
 
@@ -47,14 +57,14 @@ class IdCardBack extends ConsumerWidget {
               ),
               // Address value (label baked into background above this box).
               Positioned(
-                left: w * 0.40, top: h * 0.363, width: w * 0.58, height: h * 0.06,
+                left: colLeft, top: h * 0.363, width: colWidth, height: h * 0.06,
                 child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.center,
-                    child: Text(student.fullAddress, textAlign: TextAlign.center,
+                    child: Text(student.idCardAddress, textAlign: TextAlign.center,
                         style: GoogleFonts.fredoka(fontWeight: FontWeight.w600, fontSize: 19, color: _kIdCardTextColor))),
               ),
               // Date of birth value (label baked into background above this box).
               Positioned(
-                left: w * 0.40, top: h * 0.475, width: w * 0.58, height: h * 0.06,
+                left: colLeft, top: h * 0.475, width: colWidth, height: h * 0.06,
                 child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.center,
                     child: Text('${student.dateOfBirth.month}/${student.dateOfBirth.day}/${student.dateOfBirth.year}',
                         textAlign: TextAlign.center,
@@ -63,13 +73,29 @@ class IdCardBack extends ConsumerWidget {
               // Emergency contact (name + phone, label baked into background
               // above this box) — or an inline "add" affordance if missing.
               Positioned(
-                left: w * 0.40, top: h * 0.60, width: w * 0.58, height: h * 0.10,
+                left: colLeft, top: h * 0.60, width: colWidth, height: h * 0.11,
                 child: hasEmergencyContact
+                    // Two Texts rather than one with a newline, so the name can
+                    // outsize the phone number the way the reference design
+                    // does (55.5pt vs 41.6pt on its canvas, a ~1.33x ratio).
+                    // A single Text forced both to share one size.
                     ? FittedBox(
                         fit: BoxFit.scaleDown, alignment: Alignment.center,
-                        child: Text('${student.emergencyContactName}\n${student.emergencyContactPhone}',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.fredoka(fontWeight: FontWeight.w600, fontSize: 20, color: _kIdCardTextColor)),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(student.emergencyContactName!,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.fredoka(
+                                    fontWeight: FontWeight.w700, fontSize: 27, height: 1.1,
+                                    color: _kIdCardTextColor)),
+                            Text(student.emergencyContactPhone!,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.fredoka(
+                                    fontWeight: FontWeight.w600, fontSize: 20, height: 1.1,
+                                    color: _kIdCardTextColor)),
+                          ],
+                        ),
                       )
                     : Center(
                         child: InkWell(
@@ -80,24 +106,76 @@ class IdCardBack extends ConsumerWidget {
                         ),
                       ),
               ),
-              // Scholar's own name, genuine cursive/script font, as a
-              // signature stand-in (this app has no signature-capture
-              // feature) — sits over the signature-line artwork baked into
-              // the background.
+              // Signature area, laid out for a card that gets printed and then
+              // signed by hand: blank space to sign into, a rule to sign on,
+              // the printed name, and the caption naming the convention.
+              // Nothing here imitates a handwritten signature — an app-drawn
+              // script name would be a fake attestation on an identity
+              // document, and the scholar could never "sign" it themselves.
+              //
+              // x starts at 0.48 to clear the blue accent bar (which ends at
+              // 0.478) and the block bottoms out at 0.90, just above the
+              // bottom-right orange wedge, which intrudes to y 0.908 at x 0.92.
               Positioned(
-                left: w * 0.40, top: h * 0.841, width: w * 0.58, height: h * 0.06,
-                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.center,
-                    child: Text(student.fullName, textAlign: TextAlign.center,
-                        style: GoogleFonts.dancingScript(fontWeight: FontWeight.w700, fontSize: 30, color: _kIdCardTextColor))),
+                left: w * 0.48, top: h * 0.72, width: w * 0.44, height: h * 0.18,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Deliberately empty: this is where the scholar signs.
+                    // A Spacer rather than a SizedBox so it absorbs whatever is
+                    // left after the fixed rows below. Sizing it explicitly
+                    // overflowed the column by a fraction of a pixel once the
+                    // rule's fixed 1.2px was added to the height fractions.
+                    const Spacer(),
+                    Container(height: 1.2, color: _kIdCardTextColor),
+                    SizedBox(height: h * 0.006),
+                    SizedBox(
+                      height: h * 0.045,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown, alignment: Alignment.topCenter,
+                        child: Text(student.fullName.toUpperCase(),
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.barlowSemiCondensed(
+                                fontWeight: FontWeight.w700, fontSize: 18,
+                                letterSpacing: 0.6, color: _kIdCardTextColor)),
+                      ),
+                    ),
+                    SizedBox(
+                      height: h * 0.032,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown, alignment: Alignment.topCenter,
+                        child: Text('SIGNATURE OVER PRINTED NAME',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.barlowSemiCondensed(
+                                fontWeight: FontWeight.w600, fontSize: 11,
+                                letterSpacing: 0.5, color: _kIdCardTextColor)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              // QR code — left region. Measured directly off this widget's
-              // own rendered output: the previous box's bottom edge (0.8025)
-              // was essentially touching the blue accent block's top edge
-              // (0.804, measured from the actual downloaded card render), so
-              // it's shrunk slightly to leave a real gap above the block.
-              // Sized as a genuine square on the card's aspect ratio.
+              // QR code — horizontally centred on the blue accent bar in the
+              // background artwork, whose midpoint measures 0.2516 of the card
+              // width (bar spans x 43-806 of the 1687px reference canvas). The
+              // previous box was centred at 0.1677, noticeably left of it.
+              //
+              // Width 0.30 puts the right edge at 0.402, which is why the info
+              // column was pulled back to 0.46 above — the two would otherwise
+              // collide. Vertical space is now the real ceiling, not horizontal:
+              // 0.30w is 0.48h at the default aspect, against a free band of
+              // only ~0.546h between the diagonal header (which dips to ~0.285
+              // over the QR's x-range) and the blue bar's top edge at 0.826.
+              // It is centred in that band.
+              //
+              // Both dimensions are the same pixel value rather than a
+              // width/height fraction pair, so the code stays genuinely square
+              // for any backAspectRatio instead of only at the default 1.6.
+              // The clamp keeps it inside the band on unusually wide artwork.
               Positioned(
-                left: w * 0.0267, top: h * 0.3321, width: w * 0.282, height: h * 0.448,
+                left: w * 0.2516 - qrSide / 2,
+                top: h * 0.558 - qrSide / 2,
+                width: qrSide,
+                height: qrSide,
                 child: QrImageView(
                   data: student.qrDisplayData,
                   backgroundColor: Colors.white,

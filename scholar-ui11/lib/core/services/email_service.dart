@@ -1,8 +1,17 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:http/http.dart' as http;
 
 import '../constants/api_config.dart';
+
+/// A pending verification code held in memory for the current app session.
+class _OtpEntry {
+  final String code;
+  final DateTime expiresAt;
+  int attempts = 0;
+  _OtpEntry(this.code, this.expiresAt);
+}
 
 /// Result of an email/OTP operation.
 class EmailResult {
@@ -16,13 +25,19 @@ class EmailResult {
   const EmailResult(this.success, this.message, {this.devCode});
 }
 
-/// Transactional email + OTP operations.
+/// Registration email verification.
 ///
-/// All email is sent server-side over SMTP by the project's Firebase Cloud
-/// Functions (`sendEmailOTP`, `verifyEmailOTP`, `requestPasswordResetOTP`,
-/// `resetPasswordWithOTP`) using nodemailer. The 6-digit codes are generated,
-/// stored (hashed) and verified on the server — the client never sees or
-/// compares the code itself. This replaces the old client-side EmailJS flow.
+/// The 6-digit code is generated on the device, held in memory for the app
+/// session, and compared locally; EmailJS is used purely as a delivery
+/// mechanism for the email itself. No backend of ours is involved, which is
+/// why registration keeps working in builds that cannot reach Cloud Functions.
+///
+/// (An earlier version of this comment claimed the opposite — that codes were
+/// generated and verified server-side by `sendEmailOTP`/`verifyEmailOTP` Cloud
+/// Functions, and that this "replaces the old client-side EmailJS flow". That
+/// was stale in both directions: those functions are not called anywhere and
+/// were never deployed. Corrected here because the wrong comment led to a
+/// wrong diagnosis of registration as broken.)
 class EmailService {
   const EmailService._();
 
@@ -31,126 +46,50 @@ class EmailService {
     'Content-Type': 'application/json',
   };
 
-  /// Reads the human-readable error message out of a Cloud Function error body.
-  static String _errorFrom(http.Response res, String fallback) {
-    try {
-      final body = jsonDecode(res.body);
-      if (body is Map && body['error'] != null) {
-        final err = body['error'];
-        if (err is Map && err['message'] != null) return err['message'].toString();
-        return err.toString();
-      }
-      if (body is Map && body['message'] != null) return body['message'].toString();
-    } catch (_) {/* fall through */}
-    return fallback;
+  // ── Email verification (EmailJS, no backend) ───────────────────────────────
+  // The 6-digit code is generated and verified in-app; EmailJS only delivers
+  // the email. Codes live in memory for the app session and expire after 10 min.
+
+  static const Duration _otpTtl = Duration(minutes: 10);
+  static const int _otpMaxAttempts = 5;
+  static final Map<String, _OtpEntry> _pendingCodes = {};
+
+  static String _generateCode() {
+    // 100000–999999, cryptographically-random so it isn't guessable.
+    return (Random.secure().nextInt(900000) + 100000).toString();
   }
 
-  // ── Email verification ─────────────────────────────────────────────────────
-
-  /// Asks the server to email a 6-digit verification code to [toEmail].
+  /// Generates a 6-digit code, stores it for [toEmail], and emails it via
+  /// EmailJS. The code never leaves the device except inside the email body.
   static Future<EmailResult> sendVerificationCode({required String toEmail}) async {
-    try {
-      final res = await http
-          .post(
-            Uri.parse(ApiConfig.sendEmailOTP),
-            headers: _jsonHeaders,
-            body: jsonEncode({'email': toEmail.trim()}),
-          )
-          .timeout(_timeout);
-
-      if (res.statusCode == 200) {
-        String? devCode;
-        try {
-          final body = jsonDecode(res.body);
-          if (body is Map && body['devCode'] != null) {
-            devCode = body['devCode'].toString();
-          }
-        } catch (_) {/* ignore */}
-        return EmailResult(
-          true,
-          'Verification code sent. Check your email.',
-          devCode: devCode,
-        );
-      }
-      return EmailResult(false, _errorFrom(res, 'Could not send the verification code.'));
-    } catch (_) {
+    final email = toEmail.trim();
+    if (!EmailJsConfig.isConfigured) {
       return const EmailResult(
         false,
-        'Unable to reach the email service. Check your connection and try again.',
+        'Email service is not configured yet. Please try again later.',
       );
     }
-  }
 
-  /// Verifies the [code] the user entered for [toEmail].
-  static Future<EmailResult> verifyCode({
-    required String toEmail,
-    required String code,
-  }) async {
+    final code = _generateCode();
+    _pendingCodes[email.toLowerCase()] =
+        _OtpEntry(code, DateTime.now().add(_otpTtl));
+
     try {
       final res = await http
           .post(
-            Uri.parse(ApiConfig.verifyEmailOTP),
-            headers: _jsonHeaders,
-            body: jsonEncode({'email': toEmail.trim(), 'otp': code.trim()}),
-          )
-          .timeout(_timeout);
-
-      if (res.statusCode == 200) {
-        return const EmailResult(true, 'Email verified successfully.');
-      }
-      return EmailResult(false, _errorFrom(res, 'Incorrect or expired code.'));
-    } catch (_) {
-      return const EmailResult(
-        false,
-        'Unable to reach the verification service. Please try again.',
-      );
-    }
-  }
-
-  // ── Password reset ─────────────────────────────────────────────────────────
-
-  /// Requests a password-reset code be emailed to [toEmail]. The response is
-  /// intentionally generic (it does not reveal whether the account exists).
-  static Future<EmailResult> requestPasswordReset({required String toEmail}) async {
-    try {
-      final res = await http
-          .post(
-            Uri.parse(ApiConfig.requestPasswordResetOTP),
-            headers: _jsonHeaders,
-            body: jsonEncode({'email': toEmail.trim()}),
-          )
-          .timeout(_timeout);
-
-      if (res.statusCode == 200) {
-        return const EmailResult(
-          true,
-          'If an account exists for that email, a reset code has been sent.',
-        );
-      }
-      return EmailResult(false, _errorFrom(res, 'Could not send the reset code.'));
-    } catch (_) {
-      return const EmailResult(
-        false,
-        'Unable to reach the email service. Check your connection and try again.',
-      );
-    }
-  }
-
-  /// Verifies the reset [code] and sets [newPassword] for [toEmail].
-  static Future<EmailResult> resetPassword({
-    required String toEmail,
-    required String code,
-    required String newPassword,
-  }) async {
-    try {
-      final res = await http
-          .post(
-            Uri.parse(ApiConfig.resetPasswordWithOTP),
+            Uri.parse(EmailJsConfig.endpoint),
             headers: _jsonHeaders,
             body: jsonEncode({
-              'email': toEmail.trim(),
-              'otp': code.trim(),
-              'newPassword': newPassword,
+              'service_id': EmailJsConfig.serviceId,
+              'template_id': EmailJsConfig.templateId,
+              'user_id': EmailJsConfig.publicKey,
+              'template_params': {
+                'to_email': email,
+                'email': email,
+                'passcode': code,
+                'code': code,
+                'time': '10 minutes',
+              },
             }),
           )
           .timeout(_timeout);
@@ -158,15 +97,73 @@ class EmailService {
       if (res.statusCode == 200) {
         return const EmailResult(
           true,
-          'Your password has been reset. You can now sign in with your new password.',
+          'Verification code sent. Check your email.',
         );
       }
-      return EmailResult(false, _errorFrom(res, 'Could not reset your password.'));
+      // EmailJS returns a plain-text reason (e.g. origin not allowed).
+      final reason = res.body.trim();
+      return EmailResult(
+        false,
+        reason.isNotEmpty
+            ? 'Could not send the verification code: $reason'
+            : 'Could not send the verification code.',
+      );
     } catch (_) {
       return const EmailResult(
         false,
-        'Unable to reach the reset service. Please try again.',
+        'Unable to reach the email service. Check your connection and try again.',
       );
     }
   }
+
+  /// Verifies the [code] the user entered for [toEmail] against the in-memory
+  /// code issued by [sendVerificationCode].
+  static Future<EmailResult> verifyCode({
+    required String toEmail,
+    required String code,
+  }) async {
+    final key = toEmail.trim().toLowerCase();
+    final entry = _pendingCodes[key];
+
+    if (entry == null) {
+      return const EmailResult(
+        false,
+        'No active verification code found. Please request a new one.',
+      );
+    }
+    if (DateTime.now().isAfter(entry.expiresAt)) {
+      _pendingCodes.remove(key);
+      return const EmailResult(
+        false,
+        'Verification code has expired. Please request a new one.',
+      );
+    }
+    if (entry.attempts >= _otpMaxAttempts) {
+      _pendingCodes.remove(key);
+      return const EmailResult(
+        false,
+        'Too many incorrect attempts. Please request a new verification code.',
+      );
+    }
+    if (entry.code != code.trim()) {
+      entry.attempts++;
+      final remaining = _otpMaxAttempts - entry.attempts;
+      return EmailResult(
+        false,
+        remaining > 0
+            ? 'Incorrect code. $remaining attempt${remaining == 1 ? '' : 's'} remaining.'
+            : 'Too many incorrect attempts. Please request a new verification code.',
+      );
+    }
+
+    _pendingCodes.remove(key);
+    return const EmailResult(true, 'Email verified successfully.');
+  }
+
+  // Password reset is not handled here. It goes through Firebase Auth's own
+  // reset email — see `AuthNotifier.sendPasswordResetEmail`. The two methods
+  // that used to live here posted to `requestPasswordResetOTP` /
+  // `resetPasswordWithOTP` Cloud Functions that were never deployed, and
+  // setting another user's password client-side is impossible anyway without
+  // a reset token or the Admin SDK.
 }

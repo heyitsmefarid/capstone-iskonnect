@@ -37,6 +37,7 @@ import {
 import { matchesExact, matchesSearch } from '../utils/filtering';
 import { bulkCreateScholars, regenerateScholarPassword, setScholarAccountDisabled } from '../services/backendApi';
 import { validateImportRows } from '../utils/scholarImportValidation';
+import { canEdit } from '../utils/auth';
 
 // SweetAlert2's `html:` option renders via innerHTML (unlike `text:`, which is
 // escaped automatically) — any Firestore- or uploaded-file-derived value
@@ -53,6 +54,9 @@ export default function Scholars() {
   const numberOfSemesters = systemSettings?.numberOfSemesters || 8;
   const { onMenuClick } = useOutletContext() || {};
   const SCHOLARSHIP_CAP = 25000;
+  // Viewer role: read-only on this page — every add/edit/delete control below
+  // is gated behind this.
+  const editAllowed = canEdit();
 
   // Caps at the SPECIFIC program's configured Tuition Cap when known, falling
   // back to the flat SCHOLARSHIP_CAP otherwise — mirrors AppContext.jsx's
@@ -770,21 +774,25 @@ export default function Scholars() {
         <div className="actions-bar" style={{ marginBottom: '1rem' }}>
           <div className="actions-left" />
           <div className="actions-right" style={{ display: 'flex', gap: '0.5rem' }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              style={{ display: 'none' }}
-              onChange={handleFileChange}
-            />
             <button className="btn btn-secondary" onClick={handleDownloadTemplate}>
               <Download size={18} />
               Template
             </button>
-            <button className="btn btn-primary" onClick={handleImportClick}>
-              <Upload size={18} />
-              Import Scholars
-            </button>
+            {editAllowed && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  style={{ display: 'none' }}
+                  onChange={handleFileChange}
+                />
+                <button className="btn btn-primary" onClick={handleImportClick}>
+                  <Upload size={18} />
+                  Import Scholars
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1000,7 +1008,7 @@ export default function Scholars() {
                         <Eye size={16} />
                         View
                       </button>
-                      {scholar.status === 'terminated' && (
+                      {editAllowed && scholar.status === 'terminated' && (
                         <button
                           className="btn btn-sm"
                           title="Reactivate — return this scholar to Active"
@@ -1011,54 +1019,58 @@ export default function Scholars() {
                           Reactivate
                         </button>
                       )}
-                      <button
-                        className="btn btn-sm"
-                        title={
-                          !scholar.uid
-                            ? 'Not available — this scholar has no linked account yet'
-                            : 'Reset/regenerate this scholar\'s temporary password'
-                        }
-                        disabled={!scholar.uid}
-                        onClick={() => handleResetPassword(scholar)}
-                        style={{
-                          background: !scholar.uid ? 'var(--bg-secondary)' : 'rgba(59, 130, 246, 0.15)',
-                          color: !scholar.uid ? 'var(--text-secondary)' : '#3b82f6',
-                          opacity: !scholar.uid ? 0.6 : 1,
-                          cursor: !scholar.uid ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        <KeyRound size={16} />
-                        Reset Password
-                      </button>
-                      <button
-                        className="btn btn-sm"
-                        title={
-                          !scholar.uid
-                            ? 'Not available — this scholar has no linked account yet'
-                            : scholar.accountDisabled
-                            ? 'Enable — restore this scholar\'s sign-in access'
-                            : 'Disable — block this scholar from signing in'
-                        }
-                        disabled={!scholar.uid}
-                        onClick={() => handleToggleAccountDisabled(scholar)}
-                        style={{
-                          background: !scholar.uid
-                            ? 'var(--bg-secondary)'
-                            : scholar.accountDisabled
-                            ? 'rgba(45, 149, 150, 0.15)'
-                            : 'rgba(239, 68, 68, 0.15)',
-                          color: !scholar.uid
-                            ? 'var(--text-secondary)'
-                            : scholar.accountDisabled
-                            ? 'var(--primary-light)'
-                            : 'var(--danger-light)',
-                          opacity: !scholar.uid ? 0.6 : 1,
-                          cursor: !scholar.uid ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        {scholar.accountDisabled ? <UserCheck size={16} /> : <Ban size={16} />}
-                        {scholar.accountDisabled ? 'Enable' : 'Disable'}
-                      </button>
+                      {editAllowed && (
+                        <button
+                          className="btn btn-sm"
+                          title={
+                            !scholar.uid
+                              ? 'Not available — this scholar has no linked account yet'
+                              : 'Reset/regenerate this scholar\'s temporary password'
+                          }
+                          disabled={!scholar.uid}
+                          onClick={() => handleResetPassword(scholar)}
+                          style={{
+                            background: !scholar.uid ? 'var(--bg-secondary)' : 'rgba(59, 130, 246, 0.15)',
+                            color: !scholar.uid ? 'var(--text-secondary)' : '#3b82f6',
+                            opacity: !scholar.uid ? 0.6 : 1,
+                            cursor: !scholar.uid ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          <KeyRound size={16} />
+                          Reset Password
+                        </button>
+                      )}
+                      {editAllowed && (
+                        <button
+                          className="btn btn-sm"
+                          title={
+                            !scholar.uid
+                              ? 'Not available — this scholar has no linked account yet'
+                              : scholar.accountDisabled
+                              ? 'Enable — restore this scholar\'s sign-in access'
+                              : 'Disable — block this scholar from signing in'
+                          }
+                          disabled={!scholar.uid}
+                          onClick={() => handleToggleAccountDisabled(scholar)}
+                          style={{
+                            background: !scholar.uid
+                              ? 'var(--bg-secondary)'
+                              : scholar.accountDisabled
+                              ? 'rgba(45, 149, 150, 0.15)'
+                              : 'rgba(239, 68, 68, 0.15)',
+                            color: !scholar.uid
+                              ? 'var(--text-secondary)'
+                              : scholar.accountDisabled
+                              ? 'var(--primary-light)'
+                              : 'var(--danger-light)',
+                            opacity: !scholar.uid ? 0.6 : 1,
+                            cursor: !scholar.uid ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {scholar.accountDisabled ? <UserCheck size={16} /> : <Ban size={16} />}
+                          {scholar.accountDisabled ? 'Enable' : 'Disable'}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -1172,12 +1184,14 @@ export default function Scholars() {
                           ? 'NOT ENROLLED'
                           : 'FOR VERIFICATION'}
                       </span>
-                      <button
-                        className="btn-enrollment-toggle"
-                        onClick={() => handleEvaluateEnrollment()}
-                      >
-                        Evaluate Enrollment
-                      </button>
+                      {editAllowed && (
+                        <button
+                          className="btn-enrollment-toggle"
+                          onClick={() => handleEvaluateEnrollment()}
+                        >
+                          Evaluate Enrollment
+                        </button>
+                      )}
                     </div>
                     {selectedScholar.enrollmentStatus === 'Not Enrolled' && selectedScholar.enrollmentNotEnrolledReason && (
                       <p className="enrollment-reason-note">
@@ -1319,8 +1333,8 @@ export default function Scholars() {
                     border: '1px solid rgba(45, 149, 150, 0.2)'
                   }}>
                     <h4 style={{ margin: 0, color: 'var(--primary-light)', fontSize: '1.125rem', fontWeight: 700 }}>Financial Information</h4>
-                    {!isEditingFinancial ? (
-                      <button 
+                    {editAllowed && (!isEditingFinancial ? (
+                      <button
                         className="btn-edit-financial"
                         onClick={() => {
                           setIsEditingFinancial(true);
@@ -1401,7 +1415,7 @@ export default function Scholars() {
                           Cancel
                         </button>
                       </div>
-                    )}
+                    ))}
                   </div>
                   <div className="financial-grid">
                     <div className="financial-item">

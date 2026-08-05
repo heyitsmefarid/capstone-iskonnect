@@ -3,16 +3,23 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iskonnectttt/core/services/scholar_firestore_service.dart';
 import 'package:iskonnectttt/core/services/storage_service.dart';
 import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:iskonnectttt/features/scholarship_application/screens/bfcsp_application_form_screen.dart';
 import 'package:iskonnectttt/shared/widgets/custom_button.dart';
 import 'package:iskonnectttt/shared/widgets/dialog_helper.dart';
+import 'package:iskonnectttt/shared/widgets/inline_pdf_preview.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 enum RequirementStatus {
   notSubmitted,
+  /// File attached, but the applicant has not pressed "Submit Application"
+  /// yet. Attaching a file is not the same as submitting it: the applicant can
+  /// still swap or remove it, and the CED admin must not see it as submitted
+  /// until they actually send it.
+  uploaded,
   submitted,
   underReview,
   approved,
@@ -25,6 +32,8 @@ extension RequirementStatusLabel on RequirementStatus {
     switch (this) {
       case RequirementStatus.notSubmitted:
         return 'Not submitted';
+      case RequirementStatus.uploaded:
+        return 'Uploaded';
       case RequirementStatus.submitted:
         return 'Submitted';
       case RequirementStatus.underReview:
@@ -42,9 +51,14 @@ extension RequirementStatusLabel on RequirementStatus {
     switch (this) {
       case RequirementStatus.notSubmitted:
         return AppColors.textSecondary;
+      // Blue, deliberately not green: the document is in place but still
+      // needs the applicant to submit it.
+      case RequirementStatus.uploaded:
+        return AppColors.info;
+      // Green only once it has actually been submitted.
       case RequirementStatus.submitted:
       case RequirementStatus.resubmitted:
-        return AppColors.primary;
+        return AppColors.success;
       case RequirementStatus.underReview:
         return AppColors.warning;
       case RequirementStatus.approved:
@@ -84,8 +98,18 @@ class ApplicationRequirement {
     this.status = RequirementStatus.notSubmitted,
   });
 
-  bool get isSubmitted =>
+  /// A document is attached — enough to show the file chip and the
+  /// View/Edit/Remove actions, and to count toward "ready to submit".
+  /// Deliberately distinct from [isSubmittedToAdmin]: an `uploaded` file is
+  /// attached but has not been sent yet.
+  bool get hasFile =>
       fileName != null && status != RequirementStatus.notSubmitted;
+
+  /// Actually sent to the City Education Department. This is what the admin
+  /// panel's `submitted` flag must reflect — attaching a file must not make
+  /// the requirement look submitted on their side.
+  bool get isSubmittedToAdmin =>
+      hasFile && status != RequirementStatus.uploaded;
 
   String get fileSizeFormatted {
     if (fileSize == null) return '';
@@ -137,48 +161,56 @@ class ApplicationRequirementsNotifier
     return [
       ApplicationRequirement(
         id: '1',
-        title: 'Application Form',
-        description: 'Fully accomplished scholarship application form',
+        title: 'Duly Accomplished Scholarship Application Form',
+        description: 'Provided by the City Education Department',
       ),
       ApplicationRequirement(
         id: '2',
-        title: 'Certificate of Enrollment / Registration',
-        description: 'Current semester COR from your school',
+        title: 'Two (2) ID Pictures (2x2)',
+        description: 'Recent 2x2 ID photos with white background',
       ),
       ApplicationRequirement(
         id: '3',
-        title: 'Report Card / Transcript of Records',
-        description: 'Latest grades from previous semester',
+        title: 'Photocopy of Senior High School Form 137',
+        description: 'Previous semester grades or Form 137',
       ),
       ApplicationRequirement(
         id: '4',
-        title: 'Certificate of Good Moral Character',
-        description: 'Issued by your school registrar or guidance office',
+        title: 'Photocopy of Certificate of Good Moral Character',
+        description: 'From Guidance Counselor',
       ),
       ApplicationRequirement(
         id: '5',
-        title: 'PSA Birth Certificate',
-        description: 'Original or certified true copy from PSA',
+        title: "Photocopy of Parent's Voter's ID or Voter's Certification",
+        description: "Voter's ID or voter's certificate of registration",
       ),
       ApplicationRequirement(
         id: '6',
-        title: '2x2 ID Photo',
-        description: 'Recent photo with white background',
+        title: 'Certificate of Barangay Residency',
+        description: 'With length of stay, issued by your barangay',
       ),
       ApplicationRequirement(
         id: '7',
-        title: 'Barangay Certificate / Proof of Residency',
-        description: 'Certificate from your barangay',
+        title: 'Photocopy of Latest Electric Bills',
+        description: 'February and March 2026',
       ),
       ApplicationRequirement(
         id: '8',
-        title: 'Parent/Guardian Income Certificate',
-        description: 'Certificate of Employment with Income or ITR',
+        title: "Photocopy of Both Parents' 2026 Community Tax Certificate (Cedula)",
+        description: 'Current community tax certificate of both parents',
       ),
     ];
   }
 
-  void markAsSubmitted(
+  /// Attaches a file to a requirement. This does NOT submit it — the applicant
+  /// still has to press "Submit Application", which is what
+  /// [markUploadedAsSubmitted] below reacts to.
+  ///
+  /// The exception is a requirement the application has already moved past
+  /// (already submitted, under review, decided): replacing that file is a
+  /// correction to a live application, so it goes straight to `resubmitted`
+  /// and the evaluator sees it immediately.
+  void markAsUploaded(
     String id,
     String fileName, {
     String? filePath,
@@ -190,19 +222,38 @@ class ApplicationRequirementsNotifier
         return req;
       }
 
-      final nextStatus = req.status == RequirementStatus.rejected ||
-              req.status == RequirementStatus.submitted ||
-              req.status == RequirementStatus.resubmitted
+      const alreadySent = {
+        RequirementStatus.submitted,
+        RequirementStatus.resubmitted,
+        RequirementStatus.underReview,
+        RequirementStatus.approved,
+        RequirementStatus.rejected,
+      };
+      final nextStatus = alreadySent.contains(req.status)
           ? RequirementStatus.resubmitted
-          : RequirementStatus.submitted;
+          : RequirementStatus.uploaded;
 
       return req.copyWith(
         fileName: fileName,
         filePath: filePath,
         fileUrl: fileUrl,
         fileSize: fileSize,
-        submittedAt: DateTime.now(),
+        // Only a real submission stamps a submission time.
+        submittedAt: nextStatus == RequirementStatus.uploaded ? null : DateTime.now(),
         status: nextStatus,
+      );
+    }).toList();
+  }
+
+  /// Promotes every attached-but-unsent document to `submitted`. Called when
+  /// the applicant presses "Submit Application" — the single point where a
+  /// requirement becomes submitted.
+  void markUploadedAsSubmitted() {
+    state = state.map((req) {
+      if (req.status != RequirementStatus.uploaded) return req;
+      return req.copyWith(
+        status: RequirementStatus.submitted,
+        submittedAt: DateTime.now(),
       );
     }).toList();
   }
@@ -231,8 +282,11 @@ class ApplicationRequirementsNotifier
 
   int get requiredCount => state.where((r) => r.isRequired).length;
 
+  /// Counts attached files, including not-yet-submitted `uploaded` ones —
+  /// this drives the progress bar and gates the Submit button, so it has to
+  /// reach 100% *before* submitting, not after.
   int get requiredSubmittedCount => state
-      .where((r) => r.isRequired && r.isSubmitted && r.status != RequirementStatus.rejected)
+      .where((r) => r.isRequired && r.hasFile && r.status != RequirementStatus.rejected)
       .length;
 
   bool get hasRejectedRequired =>
@@ -240,6 +294,49 @@ class ApplicationRequirementsNotifier
 
   bool get canSubmitApplication =>
       requiredSubmittedCount == requiredCount && !hasRejectedRequired;
+
+  void loadFromMap(Map<String, dynamic> rawMap) {
+    state = state.map((req) {
+      final key = _adminKeyById[req.id];
+      if (key == null) return req;
+      final entry = rawMap[key];
+      if (entry is! Map) return req;
+      final e = Map<String, dynamic>.from(entry);
+      final statusStr = e['status']?.toString() ?? '';
+      // An uploaded-but-unsent file is stored with submitted:false, so it has
+      // to be restored explicitly — otherwise reopening the screen would drop
+      // a file the applicant already attached.
+      final isUploadedOnly = statusStr == 'uploaded' && e['fileName'] != null;
+      if (e['submitted'] != true && !isUploadedOnly) return req;
+      RequirementStatus status;
+      switch (statusStr) {
+        case 'uploaded':
+          status = RequirementStatus.uploaded;
+          break;
+        case 'approved':
+          status = RequirementStatus.approved;
+          break;
+        case 'rejected':
+          status = RequirementStatus.rejected;
+          break;
+        case 'underReview':
+        case 'under_review':
+          status = RequirementStatus.underReview;
+          break;
+        case 'resubmitted':
+          status = RequirementStatus.resubmitted;
+          break;
+        default:
+          status = RequirementStatus.submitted;
+      }
+      return req.copyWith(
+        fileName: e['fileName']?.toString() ?? req.title,
+        fileUrl: e['fileUrl']?.toString(),
+        fileSize: e['fileSize'] is num ? (e['fileSize'] as num).toInt() : null,
+        status: status,
+      );
+    }).toList();
+  }
 }
 
 // Maps each local requirement onto the admin panel's requirement keys so the
@@ -262,7 +359,7 @@ Map<String, dynamic> _buildRequirementsMap(List<ApplicationRequirement> requirem
     final key = _adminKeyById[req.id];
     if (key == null) continue;
     map[key] = {
-      'submitted': req.isSubmitted,
+      'submitted': req.isSubmittedToAdmin,
       'status': req.status.name,
       'fileName': req.fileName,
       'fileUrl': req.fileUrl,
@@ -272,14 +369,34 @@ Map<String, dynamic> _buildRequirementsMap(List<ApplicationRequirement> requirem
   return map;
 }
 
-class ScholarshipApplicationScreen extends ConsumerWidget {
+class ScholarshipApplicationScreen extends ConsumerStatefulWidget {
   const ScholarshipApplicationScreen({super.key});
 
-  // Persists the current requirement state to the applicant's Firestore user
-  // doc. Called after every submit/remove so the admin sees an applicant as
-  // soon as they've submitted one or more requirements — not only after the
-  // final "Submit Application" step.
-  Future<void> _persistRequirements(WidgetRef ref) async {
+  @override
+  ConsumerState<ScholarshipApplicationScreen> createState() =>
+      _ScholarshipApplicationScreenState();
+}
+
+class _ScholarshipApplicationScreenState
+    extends ConsumerState<ScholarshipApplicationScreen> {
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRequirementsFromFirestore();
+  }
+
+  Future<void> _loadRequirementsFromFirestore() async {
+    final studentId = await ScholarFirestoreService.currentStudentId();
+    if (studentId == null || !mounted) return;
+    final doc = await ScholarFirestoreService.fetchStudentDoc(studentId);
+    final raw = doc?['requirements'];
+    if (raw is! Map || !mounted) return;
+    ref.read(applicationRequirementsProvider.notifier)
+        .loadFromMap(Map<String, dynamic>.from(raw));
+  }
+
+  Future<void> _persistRequirements() async {
     final requirements = ref.read(applicationRequirementsProvider);
     await ref
         .read(authStateProvider.notifier)
@@ -287,7 +404,7 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final requirements = ref.watch(applicationRequirementsProvider);
     final notifier = ref.watch(applicationRequirementsProvider.notifier);
     final authState = ref.watch(authStateProvider);
@@ -300,7 +417,7 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text(
           'Scholarship Application',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: Colors.white),
         ),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -348,11 +465,11 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
                     .map(
                       (req) => _RequirementCard(
                         requirement: req,
-                        onUpload: () => _handleUpload(context, ref, req),
-                        onEdit: () => _handleUpload(context, ref, req),
+                        onUpload: () => _handleUpload(context, req),
+                        onEdit: () => _handleUpload(context, req),
                         onRemove: () async {
                           notifier.removeSubmission(req.id);
-                          await _persistRequirements(ref);
+                          await _persistRequirements();
                         },
                         onView: () => _showDocumentDetails(context, req),
                         uploadLabel: req.id == '1' ? 'Fill Out Form' : 'Upload',
@@ -367,7 +484,7 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: CustomButton(
                 text: 'Submit Application',
-                onPressed: () => _submitApplication(context, ref),
+                onPressed: () => _submitApplication(context),
                 isLoading: authState.isLoading,
               ),
             ),
@@ -397,7 +514,6 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
 
   Future<void> _handleUpload(
     BuildContext context,
-    WidgetRef ref,
     ApplicationRequirement requirement,
   ) async {
     // Application Form (id '1') opens the multi-step BFCSP form instead of file picker
@@ -412,12 +528,12 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
         ),
       );
       if (submitted == true) {
-        ref.read(applicationRequirementsProvider.notifier).markAsSubmitted(
+        ref.read(applicationRequirementsProvider.notifier).markAsUploaded(
           '1',
           'BFCSP Application Form (submitted)',
           fileSize: 0,
         );
-        await _persistRequirements(ref);
+        await _persistRequirements();
       }
       return;
     }
@@ -469,14 +585,14 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
         );
       }
 
-      ref.read(applicationRequirementsProvider.notifier).markAsSubmitted(
+      ref.read(applicationRequirementsProvider.notifier).markAsUploaded(
             requirement.id,
             file.name,
             filePath: kIsWeb ? null : file.path,
             fileUrl: fileUrl,
             fileSize: file.size,
           );
-      await _persistRequirements(ref);
+      await _persistRequirements();
 
       if (context.mounted) {
         final didUpload = fileUrl != null;
@@ -555,6 +671,8 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
                       ),
                     ),
                   )
+                else if (hasFile && isPdfFile(req.fileName, req.fileUrl))
+                  InlinePdfPreview(url: req.fileUrl!)
                 else if (hasFile)
                   InkWell(
                     onTap: () => _openFileUrl(dialogContext, req.fileUrl!),
@@ -601,7 +719,7 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
     );
   }
 
-  void _submitApplication(BuildContext context, WidgetRef ref) {
+  void _submitApplication(BuildContext context) {
     DialogHelper.showConfirmDialog(
       context: context,
       title: 'Submit Application',
@@ -609,6 +727,11 @@ class ScholarshipApplicationScreen extends ConsumerWidget {
           'Submit your scholarship application now? You can still resubmit documents if an evaluator rejects a requirement.',
       confirmText: 'Submit',
       onConfirm: () async {
+        // This is the moment a document actually becomes submitted: promote
+        // every attached-but-unsent file first, so the map built below reports
+        // them to the admin as submitted rather than merely uploaded.
+        ref.read(applicationRequirementsProvider.notifier).markUploadedAsSubmitted();
+
         // Build a requirements map keyed by the admin panel's requirement keys
         // so the City Education Department admin can see what was submitted.
         final requirements = ref.read(applicationRequirementsProvider);
@@ -874,7 +997,7 @@ class _RequirementCard extends StatelessWidget {
                             child: Icon(
                               _isApplicationForm
                                   ? Icons.article_outlined
-                                  : requirement.isSubmitted
+                                  : requirement.hasFile
                                       ? Icons.insert_drive_file_outlined
                                       : Icons.upload_file_outlined,
                               color: requirement.status.color(),
@@ -980,7 +1103,7 @@ class _RequirementCard extends StatelessWidget {
   }
 
   List<Widget> _buildActions() {
-    if (!requirement.isSubmitted) {
+    if (!requirement.hasFile) {
       return [
         _ActionButton(
           icon: uploadIcon,
@@ -995,7 +1118,10 @@ class _RequirementCard extends StatelessWidget {
         requirement.status != RequirementStatus.underReview;
 
     return [
-      _ActionButton(icon: Icons.visibility_outlined, label: 'View', onPressed: onView),
+      // The application form is filled out in-app rather than uploaded as a
+      // file, so there's nothing for "View" to show — omit it here.
+      if (!_isApplicationForm)
+        _ActionButton(icon: Icons.visibility_outlined, label: 'View', onPressed: onView),
       _ActionButton(
         icon: Icons.edit_outlined,
         label: 'Edit',
@@ -1010,7 +1136,7 @@ class _RequirementCard extends StatelessWidget {
   }
 
   Color _getBorderColor() {
-    if (!requirement.isSubmitted) {
+    if (!requirement.hasFile) {
       return AppColors.border;
     }
 

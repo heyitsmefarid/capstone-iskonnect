@@ -4,8 +4,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/core/utils/formatters.dart';
+import 'package:iskonnectttt/core/models/event_model.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:iskonnectttt/features/attendance/providers/attendance_provider.dart';
+import 'package:iskonnectttt/features/events/providers/events_provider.dart';
 import 'package:iskonnectttt/shared/widgets/loading_widget.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 
@@ -15,8 +17,9 @@ class AttendanceScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final student = ref.watch(currentStudentProvider);
-    final attendanceList = ref.watch(attendanceProvider);
+    final attendanceList = ref.watch(currentTermAttendanceProvider);
     final summary = ref.watch(attendanceSummaryProvider);
+    final upcomingEvents = ref.watch(upcomingEventsProvider);
 
     if (student == null) {
       return const Center(child: CircularProgressIndicator());
@@ -141,23 +144,10 @@ class AttendanceScreen extends ConsumerWidget {
                               color: const Color(0xFF4ADE80),
                             ),
                             const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _CompactAttendanceRow(
-                                    label: 'Absent',
-                                    value: '${summary.absent}',
-                                    color: const Color(0xFFF87171),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: _CompactAttendanceRow(
-                                    label: 'Excused',
-                                    value: '${summary.excused}',
-                                    color: const Color(0xFFFBBF24),
-                                  ),
-                                ),
-                              ],
+                            _CompactAttendanceRow(
+                              label: 'Absent',
+                              value: '${summary.absent}',
+                              color: const Color(0xFFF87171),
                             ),
                           ],
                         ),
@@ -167,6 +157,92 @@ class AttendanceScreen extends ConsumerWidget {
                 ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
               ),
             ),
+            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+            // Upcoming Events Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Upcoming Events',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        '${upcomingEvents.length}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ).animate().fadeIn(delay: 250.ms),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+            if (upcomingEvents.isEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.event_note_rounded,
+                            color: AppColors.textTertiary, size: 20),
+                        const SizedBox(width: 10),
+                        const Text(
+                          'No upcoming events.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(delay: 300.ms),
+                ),
+              )
+            else
+              SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final event = upcomingEvents[index];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 4,
+                    ),
+                    child: _EventCard(event: event)
+                        .animate()
+                        .fadeIn(delay: Duration(milliseconds: 300 + (index * 50)))
+                        .slideY(begin: 0.05, delay: Duration(milliseconds: 300 + (index * 50))),
+                  );
+                }, childCount: upcomingEvents.length),
+              ),
             const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
             // Attendance List Header
@@ -322,6 +398,83 @@ class _ModernHeader extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Card for a single upcoming scheduled event.
+class _EventCard extends StatelessWidget {
+  final EventModel event;
+
+  const _EventCard({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.event_available_rounded,
+              color: AppColors.primary,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  event.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  Formatters.formatFullDate(event.date),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (event.required)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Text(
+                'Required',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.warning,
+                ),
+              ),
+            ),
         ],
       ),
     );

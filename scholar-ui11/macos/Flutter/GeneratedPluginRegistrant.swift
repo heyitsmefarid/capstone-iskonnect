@@ -12,6 +12,8 @@ import firebase_app_check
 import firebase_auth
 import firebase_core
 import firebase_storage
+import flutter_local_notifications
+import gal
 import path_provider_foundation
 import printing
 import rive_native
@@ -27,6 +29,8 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   FLTFirebaseAuthPlugin.register(with: registry.registrar(forPlugin: "FLTFirebaseAuthPlugin"))
   FLTFirebaseCorePlugin.register(with: registry.registrar(forPlugin: "FLTFirebaseCorePlugin"))
   FLTFirebaseStoragePlugin.register(with: registry.registrar(forPlugin: "FLTFirebaseStoragePlugin"))
+  FlutterLocalNotificationsPlugin.register(with: registry.registrar(forPlugin: "FlutterLocalNotificationsPlugin"))
+  GalPlugin.register(with: registry.registrar(forPlugin: "GalPlugin"))
   PathProviderPlugin.register(with: registry.registrar(forPlugin: "PathProviderPlugin"))
   PrintingPlugin.register(with: registry.registrar(forPlugin: "PrintingPlugin"))
   RiveNativePlugin.register(with: registry.registrar(forPlugin: "RiveNativePlugin"))

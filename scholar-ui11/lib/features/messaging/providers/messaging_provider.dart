@@ -129,7 +129,12 @@ class GroupChatsNotifier extends StateNotifier<List<GroupChat>> {
   Future<void> _handleRecords(List<Map<String, dynamic>> records) async {
     final myId = _myId;
     if (myId == null) {
-      state = const [];
+      // Guarded like the `state = groups` assignment further down this same
+      // method: resetPerStudentProviders invalidates this provider on every
+      // login/logout, and Riverpod builds a provider that had never been read
+      // before disposing it, so this notifier can be torn down before the
+      // stream's first event even arrives here.
+      if (mounted) state = const [];
       return;
     }
 

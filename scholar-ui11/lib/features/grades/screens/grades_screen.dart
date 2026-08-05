@@ -8,6 +8,7 @@ import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:iskonnectttt/features/grades/providers/grades_provider.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class GradesScreen extends ConsumerStatefulWidget {
   const GradesScreen({super.key});
@@ -19,6 +20,7 @@ class GradesScreen extends ConsumerStatefulWidget {
 class _GradesScreenState extends ConsumerState<GradesScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isFabOpen = false;
 
   bool _isImageFile(String fileType) {
     final normalized = fileType.toLowerCase();
@@ -55,21 +57,80 @@ class _GradesScreenState extends ConsumerState<GradesScreen>
       return;
     }
 
-    if (cor.filePath == null) {
-      if (context.mounted) {
+    // filePath/fileBytes only exist for a file picked in THIS session, so after
+    // an app restart (or on another device) a stored COR had neither and this
+    // reported "preview unavailable" — even though the upload had been saved to
+    // Cloudinary and cor.fileUrl was sitting right there unused. The COG viewer
+    // already worked this way; COR simply never consulted the URL.
+    final url = cor.fileUrl;
+    if (url != null && url.isNotEmpty) {
+      if (_isImageFile(cor.fileType)) {
+        if (!context.mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) {
+            return Dialog.fullscreen(
+              child: Scaffold(
+                backgroundColor: Colors.black,
+                appBar: AppBar(
+                  backgroundColor: Colors.black,
+                  foregroundColor: Colors.white,
+                  title: Text(cor.fileName, overflow: TextOverflow.ellipsis),
+                ),
+                body: Center(
+                  child: InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 4,
+                    child: Image.network(
+                      url,
+                      errorBuilder: (_, _, _) => const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Could not load image.',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+        return;
+      }
+
+      final uri = Uri.tryParse(url);
+      if (uri != null) {
+        final opened = await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+        if (!opened && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unable to open file.')),
+          );
+        }
+        return;
+      }
+    }
+
+    // No URL: fall back to a non-image file still on disk from this session.
+    if (cor.filePath != null) {
+      final result = await OpenFilex.open(cor.filePath!);
+      if (context.mounted && result.type != ResultType.done) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('File preview is unavailable for this upload.'),
-          ),
+          SnackBar(content: Text('Unable to open file: ${result.message}')),
         );
       }
       return;
     }
 
-    final result = await OpenFilex.open(cor.filePath!);
-    if (context.mounted && result.type != ResultType.done) {
+    if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to open file: ${result.message}')),
+        const SnackBar(
+          content: Text('File preview is unavailable for this upload.'),
+        ),
       );
     }
   }
@@ -167,7 +228,8 @@ class _GradesScreenState extends ConsumerState<GradesScreen>
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           cor.periodLabel,
@@ -217,6 +279,330 @@ class _GradesScreenState extends ConsumerState<GradesScreen>
     );
   }
 
+  bool _isImageCog(CogSubmission cog) {
+    final t = cog.fileType.toLowerCase();
+    if (t == 'jpg' || t == 'jpeg' || t == 'png' || t == 'gif' || t == 'webp') {
+      return true;
+    }
+    final u = (cog.fileUrl ?? '').toLowerCase();
+    return u.startsWith('data:image') ||
+        u.contains('/image/upload/') ||
+        RegExp(r'\.(png|jpe?g|gif|webp)(\?|$)').hasMatch(u);
+  }
+
+  /// Opens a submitted COG. Images preview in-app; other files (e.g. PDF) open
+  /// externally. COGs are stored as hosted URLs, so there are no local bytes.
+  Future<void> _openCogFile(BuildContext context, CogSubmission cog) async {
+    final url = cog.fileUrl;
+    if (url == null || url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('File preview is unavailable for this upload.'),
+        ),
+      );
+      return;
+    }
+
+    if (_isImageCog(cog)) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return Dialog.fullscreen(
+            child: Scaffold(
+              backgroundColor: Colors.black,
+              appBar: AppBar(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                title: Text(cog.fileName, overflow: TextOverflow.ellipsis),
+              ),
+              body: Center(
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 4,
+                  child: Image.network(
+                    url,
+                    errorBuilder: (_, _, _) => const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text(
+                        'Could not load image.',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      );
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to open file.')));
+    }
+  }
+
+  void _showCogStorage(
+    BuildContext context,
+    Map<String, CogSubmission> cogSubmissions,
+  ) {
+    final submissions = cogSubmissions.values.toList()
+      ..sort((a, b) => b.uploadedAt.compareTo(a.uploadedAt));
+
+    final router = GoRouter.of(context);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.assignment_turned_in_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Submitted COG Storage',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${submissions.length} file${submissions.length == 1 ? '' : 's'} — tap to view, edit to replace',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                if (submissions.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: const Text(
+                      'No submitted COG yet.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: submissions.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (_, index) {
+                        final cog = submissions[index];
+                        return Material(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(10),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () => _openCogFile(sheetCtx, cog),
+                            child: Container(
+                              padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.divider),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          cog.periodLabel,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          cog.fileName,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 18,
+                                      color: AppColors.primary,
+                                    ),
+                                    tooltip: 'Replace COG',
+                                    onPressed: () {
+                                      Navigator.of(sheetCtx).pop();
+                                      router.push('/grades/add-cog');
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showNotEnrolledNotice(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          "Your enrollment hasn't been verified yet by the CED admin.",
+        ),
+        backgroundColor: AppColors.warning,
+      ),
+    );
+  }
+
+  void _showCorRequiredNotice(BuildContext context) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Please submit your COR first before adding COG or grades.',
+        ),
+        backgroundColor: AppColors.warning,
+      ),
+    );
+  }
+
+  Widget _buildSpeedDial(
+    BuildContext context,
+    bool isEnrolled,
+    bool corSubmitted,
+  ) {
+    // COG/Subject need enrollment AND a submitted COR; COR itself only needs
+    // enrollment, since it's the thing that has to come first.
+    final cogAndSubjectEnabled = isEnrolled && corSubmitted;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (_isFabOpen) ...[
+          _SpeedDialItem(
+            heroTag: 'add-cog-fab',
+            label: 'Add COG',
+            icon: Icons.assignment_turned_in_rounded,
+            gradient: [
+              AppColors.success,
+              AppColors.success.withValues(alpha: 0.7),
+            ],
+            enabled: cogAndSubjectEnabled,
+            onTap: () {
+              if (!isEnrolled) {
+                _showNotEnrolledNotice(context);
+                return;
+              }
+              if (!corSubmitted) {
+                _showCorRequiredNotice(context);
+                return;
+              }
+              setState(() => _isFabOpen = false);
+              context.push('/grades/add-cog');
+            },
+          ),
+          const SizedBox(height: 12),
+          _SpeedDialItem(
+            heroTag: 'add-cor-fab',
+            label: 'Add COR',
+            icon: Icons.upload_file_rounded,
+            gradient: [AppColors.mustard, AppColors.mustardLight],
+            enabled: isEnrolled,
+            onTap: () {
+              if (!isEnrolled) {
+                _showNotEnrolledNotice(context);
+                return;
+              }
+              setState(() => _isFabOpen = false);
+              context.push('/grades/add-cor');
+            },
+          ),
+          const SizedBox(height: 12),
+          _SpeedDialItem(
+            heroTag: 'add-subject-fab',
+            label: 'Add Subject',
+            icon: Icons.add_rounded,
+            gradient: [AppColors.lavender, AppColors.lavenderLight],
+            enabled: cogAndSubjectEnabled,
+            onTap: () {
+              if (!isEnrolled) {
+                _showNotEnrolledNotice(context);
+                return;
+              }
+              if (!corSubmitted) {
+                _showCorRequiredNotice(context);
+                return;
+              }
+              setState(() => _isFabOpen = false);
+              context.push('/grades/add');
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+        FloatingActionButton(
+          heroTag: 'speed-dial-main',
+          onPressed: () => setState(() => _isFabOpen = !_isFabOpen),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 4,
+          child: AnimatedRotation(
+            turns: _isFabOpen ? 0.125 : 0,
+            duration: const Duration(milliseconds: 200),
+            child: const Icon(Icons.add, size: 26),
+          ),
+        ),
+      ],
+    ).animate().fadeIn(delay: 500.ms).scale();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -236,6 +622,8 @@ class _GradesScreenState extends ConsumerState<GradesScreen>
     final availablePeriods = ref.watch(availablePeriodsProvider);
     final selectedPeriod = ref.watch(selectedPeriodProvider);
     final corSubmissions = ref.watch(corSubmissionsProvider);
+    final cogSubmissions = ref.watch(cogSubmissionsProvider);
+    final activePeriodAsync = ref.watch(activeAcademicPeriodProvider);
     final selectedPeriodKey = selectedPeriod == null
         ? null
         : buildAcademicPeriodKey(
@@ -247,428 +635,535 @@ class _GradesScreenState extends ConsumerState<GradesScreen>
         ? null
         : corSubmissions[selectedPeriodKey];
 
+    final selectedCog = selectedPeriod == null
+        ? null
+        : cogSubmissions[selectedPeriodKey];
+
     if (student == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // COG/grades unlock once COR is submitted for the active term (the term
+    // new submissions auto-assign to) — St. Augustine students are exempt
+    // from COR entirely, so they never need to satisfy this check.
+    final hasCorForActivePeriod = activePeriodAsync.maybeWhen(
+      data: (active) => corSubmissions.containsKey(
+        buildAcademicPeriodKey(
+          academicYear: active.schoolYear,
+          semester: active.semester,
+        ),
+      ),
+      orElse: () => false,
+    );
+    final corGateSatisfied = student.isStAugustine || hasCorForActivePeriod;
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      floatingActionButton: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.lavender, AppColors.lavenderLight],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primary, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.lavender.withValues(alpha: 0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: FloatingActionButton.extended(
-              heroTag: 'add-subject-fab',
-              onPressed: () => context.push('/grades/add'),
-              icon: const Icon(Icons.add_rounded, size: 22),
-              label: const Text(
-                'Add Subject',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              backgroundColor: Colors.transparent,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [AppColors.mustard, AppColors.mustardLight],
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.primary, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.mustard.withValues(alpha: 0.35),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: FloatingActionButton.extended(
-              heroTag: 'add-cor-fab',
-              onPressed: () => context.push('/grades/add-cor'),
-              icon: const Icon(Icons.upload_file_rounded, size: 20),
-              label: const Text(
-                'Add COR',
-                style: TextStyle(fontWeight: FontWeight.w700),
-              ),
-              backgroundColor: Colors.transparent,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
-          ),
-        ],
-      ).animate().fadeIn(delay: 500.ms).scale(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: _buildSpeedDial(
+        context,
+        student.isEnrolled,
+        corGateSatisfied,
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      // NestedScrollView, not a plain Column: everything above the tabs is
+      // fixed-height, so on a short viewport it consumed the whole screen and
+      // left Expanded(TabBarView) with negative space — the "BOTTOM OVERFLOWED
+      // BY 33 PIXELS" stripe. Wrapping the lot in a SingleChildScrollView is
+      // not an option either, because _CurrentSemesterTab uses
+      // Expanded(ListView) and so requires a bounded height. NestedScrollView
+      // gives both: the header scrolls away, and its body still hands the
+      // TabBarView a bounded box.
       body: SafeArea(
-        child: Column(
-          children: [
-            // Modern Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Row(
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverToBoxAdapter(
+              child: Column(
                 children: [
-                  _ModernBackButton(onTap: () => context.go('/dashboard')),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  // Modern Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                    child: Row(
                       children: [
-                        const Text(
-                          'Grades',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.5,
+                        _ModernBackButton(
+                          onTap: () => context.go('/dashboard'),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Grades',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              Text(
+                                'Track your academic progress',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          'Track your academic progress',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
+                      ],
+                    ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.1),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Overall Summary Card - Compact Modern Design
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [AppColors.lavender, AppColors.lavenderLight],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.primary, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.lavender.withValues(alpha: 0.3),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          // GWA Display
+                          Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.3),
+                                width: 2,
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  gradeSummary.gwaDisplay,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                Text(
+                                  'GWA',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          // Stats
+                          Expanded(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                _CompactSummaryItem(
+                                  label: 'Subjects',
+                                  value: '${gradeSummary.totalSubjects}',
+                                  icon: Icons.menu_book_rounded,
+                                ),
+                                _CompactSummaryItem(
+                                  label: 'Units',
+                                  value: '${gradeSummary.totalUnits}',
+                                  icon: Icons.stars_rounded,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Academic Period Filter - Modern Style
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardBackground,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppColors.divider),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.cardShadow.withValues(
+                                    alpha: 0.05,
+                                  ),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<AcademicPeriod?>(
+                                value: selectedPeriod,
+                                isExpanded: true,
+                                hint: const Text('All Semesters'),
+                                icon: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                ),
+                                items: [
+                                  const DropdownMenuItem<AcademicPeriod?>(
+                                    value: null,
+                                    child: Text('All Semesters'),
+                                  ),
+                                  ...availablePeriods.map((period) {
+                                    return DropdownMenuItem<AcademicPeriod?>(
+                                      value: period,
+                                      child: Text(
+                                        period.displayName,
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
+                                    );
+                                  }),
+                                ],
+                                onChanged: (value) {
+                                  ref
+                                          .read(selectedPeriodProvider.notifier)
+                                          .state =
+                                      value;
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBackground,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.divider),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.filter_list_off_rounded),
+                            onPressed: () {
+                              ref.read(selectedPeriodProvider.notifier).state =
+                                  null;
+                            },
+                            tooltip: 'Clear Filter',
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ).animate().fadeIn(duration: 400.ms).slideX(begin: -0.1),
-            ),
-            const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-            // Overall Summary Card - Compact Modern Design
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [AppColors.lavender, AppColors.lavenderLight],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.primary, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.lavender.withValues(alpha: 0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    // GWA Display
-                    Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.3),
-                          width: 2,
+                  if (selectedPeriod != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: selectedCor == null
+                              ? (student.isStAugustine
+                                    ? AppColors.infoLight
+                                    : AppColors.warningLight)
+                              : AppColors.success.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selectedCor == null
+                                ? (student.isStAugustine
+                                      ? AppColors.info.withValues(alpha: 0.3)
+                                      : AppColors.warning.withValues(
+                                          alpha: 0.35,
+                                        ))
+                                : AppColors.success.withValues(alpha: 0.3),
+                          ),
                         ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            gradeSummary.gwaDisplay,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                          Text(
-                            'GWA',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withValues(alpha: 0.8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Stats
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _CompactSummaryItem(
-                            label: 'Subjects',
-                            value: '${gradeSummary.totalSubjects}',
-                            icon: Icons.menu_book_rounded,
-                          ),
-                          _CompactSummaryItem(
-                            label: 'Units',
-                            value: '${gradeSummary.totalUnits}',
-                            icon: Icons.stars_rounded,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1),
-            ),
-            const SizedBox(height: 16),
-
-            // Academic Period Filter - Modern Style
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardBackground,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.divider),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.cardShadow.withValues(alpha: 0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<AcademicPeriod?>(
-                          value: selectedPeriod,
-                          isExpanded: true,
-                          hint: const Text('All Semesters'),
-                          icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                          items: [
-                            const DropdownMenuItem<AcademicPeriod?>(
-                              value: null,
-                              child: Text('All Semesters'),
-                            ),
-                            ...availablePeriods.map((period) {
-                              return DropdownMenuItem<AcademicPeriod?>(
-                                value: period,
-                                child: Text(
-                                  period.displayName,
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              );
-                            }),
-                          ],
-                          onChanged: (value) {
-                            ref.read(selectedPeriodProvider.notifier).state =
-                                value;
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.divider),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.filter_list_off_rounded),
-                      onPressed: () {
-                        ref.read(selectedPeriodProvider.notifier).state = null;
-                      },
-                      tooltip: 'Clear Filter',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            if (!student.isStAugustine && selectedPeriod != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: selectedCor == null
-                        ? AppColors.warningLight
-                        : AppColors.success.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: selectedCor == null
-                          ? AppColors.warning.withValues(alpha: 0.35)
-                          : AppColors.success.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        selectedCor == null
-                            ? Icons.warning_amber_rounded
-                            : Icons.check_circle_outline_rounded,
-                        color: selectedCor == null
-                            ? AppColors.warning
-                            : AppColors.success,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
+                            Icon(
                               selectedCor == null
-                                  ? 'COR not submitted for this semester'
-                                  : 'COR submitted for this semester',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: selectedCor == null
-                                    ? AppColors.warning
-                                    : AppColors.success,
+                                  ? (student.isStAugustine
+                                        ? Icons.info_outline
+                                        : Icons.warning_amber_rounded)
+                                  : Icons.check_circle_outline_rounded,
+                              color: selectedCor == null
+                                  ? (student.isStAugustine
+                                        ? AppColors.info
+                                        : AppColors.warning)
+                                  : AppColors.success,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    selectedCor == null
+                                        ? (student.isStAugustine
+                                              ? 'COR not submitted (optional for St. Augustine)'
+                                              : 'COR not submitted for this semester')
+                                        : 'COR submitted for this semester',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: selectedCor == null
+                                          ? (student.isStAugustine
+                                                ? AppColors.info
+                                                : AppColors.warning)
+                                          : AppColors.success,
+                                    ),
+                                  ),
+                                  if (selectedCor != null)
+                                    GestureDetector(
+                                      onTap: () =>
+                                          _openCorFile(context, selectedCor),
+                                      child: Text(
+                                        selectedCor.fileName,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textSecondary,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                            if (selectedCor != null)
-                              GestureDetector(
-                                onTap: () => _openCorFile(context, selectedCor),
-                                child: Text(
-                                  selectedCor.fileName,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.textSecondary,
-                                    decoration: TextDecoration.underline,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                            TextButton(
+                              onPressed: () {
+                                if (selectedCor == null) {
+                                  context.push('/grades/add');
+                                } else {
+                                  _openCorFile(context, selectedCor);
+                                }
+                              },
+                              child: Text(
+                                selectedCor == null ? 'Upload' : 'Open',
                               ),
+                            ),
                           ],
                         ),
                       ),
-                      TextButton(
-                        onPressed: () {
-                          if (selectedCor == null) {
-                            context.push('/grades/add');
-                          } else {
-                            _openCorFile(context, selectedCor);
-                          }
-                        },
-                        child: Text(selectedCor == null ? 'Upload' : 'Open'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            if (!student.isStAugustine && selectedPeriod != null)
-              const SizedBox(height: 8),
-
-            if (!student.isStAugustine)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => _showCorStorage(context, corSubmissions),
-                    icon: const Icon(Icons.folder_open_rounded, size: 18),
-                    label: Text('View COR Storage (${corSubmissions.length})'),
-                  ),
-                ),
-              ),
-
-            if (!student.isStAugustine) const SizedBox(height: 4),
-
-            // St Augustine Notice
-            if (student.isStAugustine)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.infoLight,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: AppColors.info.withValues(alpha: 0.3),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.info_outline,
-                        color: AppColors.info,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'St. Augustine Seminary students are exempt from COR submission.',
-                          style: TextStyle(fontSize: 11, color: AppColors.info),
+
+                  if (selectedPeriod != null) const SizedBox(height: 8),
+
+                  if (selectedPeriod != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: selectedCog == null
+                              ? AppColors.warningLight
+                              : AppColors.success.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selectedCog == null
+                                ? AppColors.warning.withValues(alpha: 0.35)
+                                : AppColors.success.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              selectedCog == null
+                                  ? Icons.warning_amber_rounded
+                                  : Icons.check_circle_outline_rounded,
+                              color: selectedCog == null
+                                  ? AppColors.warning
+                                  : AppColors.success,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    selectedCog == null
+                                        ? 'COG not submitted for this semester'
+                                        : 'COG submitted for this semester',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: selectedCog == null
+                                          ? AppColors.warning
+                                          : AppColors.success,
+                                    ),
+                                  ),
+                                  if (selectedCog != null)
+                                    GestureDetector(
+                                      onTap: () =>
+                                          _openCogFile(context, selectedCog),
+                                      child: Text(
+                                        selectedCog.fileName,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: AppColors.textSecondary,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                if (selectedCog == null) {
+                                  context.push('/grades/add-cog');
+                                } else {
+                                  _openCogFile(context, selectedCog);
+                                }
+                              },
+                              child: Text(
+                                selectedCog == null ? 'Upload' : 'Open',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
+
+                  if (selectedPeriod != null) const SizedBox(height: 8),
+
+                  // A Row of two Expanded halves rather than a Wrap: at 375dp the two
+                  // "View ... Storage (n)" labels could not fit on one line, so Wrap
+                  // silently stacked them. Each button now owns half the width, and
+                  // the labels drop the redundant "View " prefix so they fit.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextButton.icon(
+                            onPressed: () =>
+                                _showCorStorage(context, corSubmissions),
+                            icon: const Icon(
+                              Icons.folder_open_rounded,
+                              size: 18,
+                            ),
+                            label: Text(
+                              'COR Storage (${corSubmissions.length})',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: TextButton.icon(
+                            onPressed: () =>
+                                _showCogStorage(context, cogSubmissions),
+                            icon: const Icon(
+                              Icons.assignment_turned_in_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              'COG Storage (${cogSubmissions.length})',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
 
-            // Tabs
-            Container(
-              margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                labelColor: Colors.white,
-                unselectedLabelColor: AppColors.textSecondary,
-                labelStyle: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-                padding: const EdgeInsets.all(3),
-                tabs: const [
-                  Tab(text: 'Current'),
-                  Tab(text: 'History'),
+                  const SizedBox(height: 4),
+
+                  // St Augustine Notice
+                  if (student.isStAugustine)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.infoLight,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.info.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline,
+                              color: AppColors.info,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                'COR submission is optional for St. Augustine Seminary students — they may still upload one, but it is not required to unlock grades.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.info,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Tabs
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicator: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      dividerColor: Colors.transparent,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: AppColors.textSecondary,
+                      labelStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      padding: const EdgeInsets.all(3),
+                      tabs: const [
+                        Tab(text: 'Current'),
+                        Tab(text: 'History'),
+                      ],
+                    ),
+                  ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1),
+                  const SizedBox(height: 8),
                 ],
-              ),
-            ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1),
-            const SizedBox(height: 8),
-
-            // Tab Content
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [_CurrentSemesterTab(), _PastGradesTab()],
               ),
             ),
           ],
+          // Bounded by NestedScrollView, so the tabs' own Expanded(ListView)
+          // children keep working.
+          body: TabBarView(
+            controller: _tabController,
+            children: [_CurrentSemesterTab(), _PastGradesTab()],
+          ),
         ),
       ),
     );
@@ -758,18 +1253,23 @@ class _CompactSummaryItem extends StatelessWidget {
 class _CurrentSemesterTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final allGrades = ref.watch(gradesProvider);
+    final evaluation =
+        ref.watch(gradesEvaluationProvider).asData?.value ?? const {};
     final activeAsync = ref.watch(activeAcademicPeriodProvider);
     // Show grades that belong to the active period (regardless of graded status).
-    // Falls back to ungraded subjects if the active period hasn't loaded yet.
-    final currentGrades = activeAsync.maybeWhen(
-      data: (active) => allGrades
-          .where((g) =>
-              g.academicYear == active.schoolYear &&
-              g.semester == active.semester)
-          .toList(),
-      orElse: () => allGrades.where((g) => !g.isGraded).toList(),
+    final currentGrades = ref.watch(currentTermGradesProvider);
+
+    // Confirmation status for the active period (only meaningful once the
+    // scholar has actually submitted grades for it).
+    final activeStatus = activeAsync.maybeWhen(
+      data: (active) => gradeConfirmationStatus(
+        evaluation,
+        active.schoolYear,
+        active.semester,
+      ),
+      orElse: () => 'pending',
     );
+    final hasSubmittedGrades = currentGrades.any((g) => g.isGraded);
 
     if (currentGrades.isEmpty) {
       return Center(
@@ -812,19 +1312,33 @@ class _CurrentSemesterTab extends ConsumerWidget {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-      itemCount: currentGrades.length,
-      itemBuilder: (context, index) {
-        final grade = currentGrades[index];
-        return _SubjectCard(grade: grade)
-            .animate()
-            .fadeIn(delay: Duration(milliseconds: 100 + (index * 50)))
-            .slideY(
-              begin: 0.1,
-              delay: Duration(milliseconds: 100 + (index * 50)),
-            );
-      },
+    return Column(
+      children: [
+        if (hasSubmittedGrades)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: _ConfirmationStatusBanner(status: activeStatus),
+          ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+            itemCount: currentGrades.length,
+            itemBuilder: (context, index) {
+              final grade = currentGrades[index];
+              return _SubjectCard(
+                    grade: grade,
+                    locked: activeStatus == 'confirmed',
+                  )
+                  .animate()
+                  .fadeIn(delay: Duration(milliseconds: 100 + (index * 50)))
+                  .slideY(
+                    begin: 0.1,
+                    delay: Duration(milliseconds: 100 + (index * 50)),
+                  );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -834,22 +1348,28 @@ class _PastGradesTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedPeriod = ref.watch(selectedPeriodProvider);
     final allGrades = ref.watch(gradesProvider);
+    final evaluation =
+        ref.watch(gradesEvaluationProvider).asData?.value ?? const {};
     final activeAsync = ref.watch(activeAcademicPeriodProvider);
     // History = grades NOT in the active period.
     // Falls back to graded-only if active period hasn't loaded yet.
     List<GradeModel> pastGrades = activeAsync.maybeWhen(
       data: (active) => allGrades
-          .where((g) =>
-              !(g.academicYear == active.schoolYear &&
-                g.semester == active.semester))
+          .where(
+            (g) =>
+                !(g.academicYear == active.schoolYear &&
+                    g.semester == active.semester),
+          )
           .toList(),
       orElse: () => allGrades.where((g) => g.isGraded).toList(),
     );
     if (selectedPeriod != null) {
       pastGrades = pastGrades
-          .where((g) =>
-              g.academicYear == selectedPeriod.academicYear &&
-              g.semester == selectedPeriod.semester)
+          .where(
+            (g) =>
+                g.academicYear == selectedPeriod.academicYear &&
+                g.semester == selectedPeriod.semester,
+          )
           .toList();
     }
 
@@ -914,6 +1434,12 @@ class _PastGradesTab extends ConsumerWidget {
         final key = sortedKeys[index];
         final grades = grouped[key]!;
         final semSummary = GradeSummary.fromGrades(grades);
+        final period = grades.first;
+        final confStatus = gradeConfirmationStatus(
+          evaluation,
+          period.academicYear,
+          period.semester,
+        );
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -942,6 +1468,8 @@ class _PastGradesTab extends ConsumerWidget {
                           ),
                         ),
                       ),
+                      _ConfirmationBadge(status: confStatus),
+                      const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -1027,8 +1555,15 @@ SubjectActionButtonStyle subjectActionButtonStyle(GradeModel grade) {
 class _SubjectCard extends ConsumerWidget {
   final GradeModel grade;
   final bool showGrade;
+  // Once the admin has confirmed this semester's grades, the scholar can no
+  // longer edit individual subjects — confirmed grades are final.
+  final bool locked;
 
-  const _SubjectCard({required this.grade, this.showGrade = false});
+  const _SubjectCard({
+    required this.grade,
+    this.showGrade = false,
+    this.locked = false,
+  });
 
   Future<void> _showEditDialog(BuildContext context, WidgetRef ref) async {
     final subjectCodeController = TextEditingController(
@@ -1041,6 +1576,10 @@ class _SubjectCard extends ConsumerWidget {
       text: grade.grade != null ? grade.grade!.toString() : '',
     );
     int selectedUnits = grade.units;
+    const remarksOptions = ['Passed', 'Failed', 'Incomplete', 'Other'];
+    String selectedRemarks = remarksOptions.contains(grade.remarks)
+        ? grade.remarks!
+        : remarksOptions.first;
 
     await showDialog(
       context: context,
@@ -1057,7 +1596,7 @@ class _SubjectCard extends ConsumerWidget {
                       controller: subjectCodeController,
                       textCapitalization: TextCapitalization.characters,
                       decoration: const InputDecoration(
-                        labelText: 'Subject Code',
+                        labelText: 'Course Code',
                         prefixIcon: Icon(Icons.code),
                       ),
                     ),
@@ -1065,7 +1604,7 @@ class _SubjectCard extends ConsumerWidget {
                     TextField(
                       controller: subjectNameController,
                       decoration: const InputDecoration(
-                        labelText: 'Subject Name',
+                        labelText: 'Course Name',
                         prefixIcon: Icon(Icons.book),
                       ),
                     ),
@@ -1099,9 +1638,30 @@ class _SubjectCard extends ConsumerWidget {
                         decimal: true,
                       ),
                       decoration: const InputDecoration(
-                        labelText: 'Grade (Optional)',
+                        labelText: 'Grade',
                         prefixIcon: Icon(Icons.grade_outlined),
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedRemarks,
+                      decoration: const InputDecoration(
+                        labelText: 'Remarks',
+                        prefixIcon: Icon(Icons.comment_outlined),
+                      ),
+                      items: remarksOptions
+                          .map(
+                            (option) => DropdownMenuItem<String>(
+                              value: option,
+                              child: Text(option),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          selectedRemarks = value ?? selectedRemarks;
+                        });
+                      },
                     ),
                   ],
                 ),
@@ -1129,20 +1689,24 @@ class _SubjectCard extends ConsumerWidget {
                       return;
                     }
 
-                    double? parsedGrade;
-                    if (gradeText.isNotEmpty) {
-                      parsedGrade = double.tryParse(gradeText);
-                      if (parsedGrade == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Please enter a valid numeric grade.',
-                            ),
-                            backgroundColor: AppColors.warning,
-                          ),
-                        );
-                        return;
-                      }
+                    if (gradeText.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Grade is required.'),
+                          backgroundColor: AppColors.warning,
+                        ),
+                      );
+                      return;
+                    }
+                    final parsedGrade = double.tryParse(gradeText);
+                    if (parsedGrade == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please enter a valid numeric grade.'),
+                          backgroundColor: AppColors.warning,
+                        ),
+                      );
+                      return;
                     }
 
                     ref
@@ -1153,6 +1717,7 @@ class _SubjectCard extends ConsumerWidget {
                             subjectName: name,
                             units: selectedUnits,
                             grade: parsedGrade,
+                            remarks: selectedRemarks,
                           ),
                         );
 
@@ -1299,6 +1864,18 @@ class _SubjectCard extends ConsumerWidget {
           // Grade Status
           if (showGrade)
             const SizedBox.shrink()
+          else if (locked)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Tooltip(
+                message: 'Confirmed grades can\'t be edited',
+                child: Icon(
+                  Icons.lock_outline_rounded,
+                  size: 16,
+                  color: AppColors.textTertiary,
+                ),
+              ),
+            )
           else
             TextButton.icon(
               onPressed: () => _showEditDialog(context, ref),
@@ -1327,6 +1904,199 @@ class _SubjectCard extends ConsumerWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Per-semester admin confirmation status badge. 'pending' (the default after
+/// the scholar submits grades) → amber; 'confirmed' → green; 'revision' → red.
+class _ConfirmationBadge extends StatelessWidget {
+  final String status;
+
+  const _ConfirmationBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    IconData icon;
+    String label;
+    switch (status) {
+      case 'confirmed':
+        color = AppColors.success;
+        icon = Icons.verified_rounded;
+        label = 'Confirmed';
+        break;
+      case 'revision':
+        color = AppColors.error;
+        icon = Icons.error_outline_rounded;
+        label = 'Needs Revision';
+        break;
+      default:
+        color = AppColors.warning;
+        icon = Icons.hourglass_empty_rounded;
+        label = 'Pending';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Full-width banner telling the scholar where their submitted grades stand in
+/// the admin's review: pending confirmation, confirmed, or flagged for revision.
+class _ConfirmationStatusBanner extends StatelessWidget {
+  final String status;
+
+  const _ConfirmationStatusBanner({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    IconData icon;
+    String message;
+    switch (status) {
+      case 'confirmed':
+        color = AppColors.success;
+        icon = Icons.verified_rounded;
+        message = 'Your grades have been confirmed by the admin.';
+        break;
+      case 'revision':
+        color = AppColors.error;
+        icon = Icons.error_outline_rounded;
+        message = 'The admin requested a revision of your submitted grades.';
+        break;
+      default:
+        color = AppColors.warning;
+        icon = Icons.hourglass_empty_rounded;
+        message = 'Grades submitted — pending admin confirmation.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpeedDialItem extends StatelessWidget {
+  final String heroTag;
+  final String label;
+  final IconData icon;
+  final List<Color> gradient;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  const _SpeedDialItem({
+    required this.heroTag,
+    required this.label,
+    required this.icon,
+    required this.gradient,
+    required this.onTap,
+    this.enabled = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveGradient = enabled
+        ? gradient
+        : [
+            AppColors.textTertiary,
+            AppColors.textTertiary.withValues(alpha: 0.7),
+          ];
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.cardBackground,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.divider),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.cardShadow.withValues(alpha: 0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: enabled ? AppColors.textPrimary : AppColors.textTertiary,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(colors: effectiveGradient),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: effectiveGradient.first.withValues(
+                  alpha: enabled ? 0.4 : 0.2,
+                ),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: FloatingActionButton.small(
+            heroTag: heroTag,
+            onPressed: onTap,
+            backgroundColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            child: Icon(icon, size: 20),
+          ),
+        ),
+      ],
     );
   }
 }

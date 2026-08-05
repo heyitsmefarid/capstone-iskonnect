@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export default function ScholarshipTimeline() {
-  const { applicants, schools } = useApp();
+  const { applicants, catalogSchools } = useApp();
   const { onMenuClick } = useOutletContext() || {};
   const [filterSchool, setFilterSchool] = useState('');
   const [filterStage, setFilterStage] = useState('');
@@ -54,6 +54,13 @@ export default function ScholarshipTimeline() {
     if (scholar.status === 'pending') return 'applicant';
     return 'applicant';
   };
+
+  // School filter options: the eligible-schools catalog (managed in System
+  // Settings) PLUS any school that actually appears on a record.
+  const schoolFilterOptions = Array.from(new Set([
+    ...(catalogSchools || []).map(s => s?.name).filter(Boolean),
+    ...applicants.map(a => a?.school).filter(Boolean),
+  ])).sort((a, b) => a.localeCompare(b));
 
   const schoolFilteredScholars = applicants.filter(s =>
     matchesExact(s.school, filterSchool)
@@ -111,8 +118,8 @@ export default function ScholarshipTimeline() {
         <div className="filters-bar">
           <select value={filterSchool} onChange={(e) => setFilterSchool(e.target.value)}>
             <option value="">All Schools</option>
-            {schools.map(school => (
-              <option key={school.id} value={school.name}>{school.name}</option>
+            {schoolFilterOptions.map(name => (
+              <option key={name} value={name}>{name}</option>
             ))}
           </select>
         </div>

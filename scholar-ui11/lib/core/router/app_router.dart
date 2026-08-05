@@ -25,6 +25,7 @@ import 'package:iskonnectttt/features/announcements/screens/announcement_detail_
 import 'package:iskonnectttt/features/messaging/screens/messaging_screen.dart';
 import 'package:iskonnectttt/features/scholarship_application/screens/scholarship_application_screen.dart';
 import 'package:iskonnectttt/features/celebration/screens/congratulations_screen.dart';
+import 'package:iskonnectttt/features/rejection/screens/rejection_screen.dart';
 import 'package:iskonnectttt/shared/widgets/main_shell.dart';
 
 // Provider to track only auth status changes (not profile updates)
@@ -76,35 +77,67 @@ String? mustChangePasswordRedirectTarget({
   return null;
 }
 
+// Mirrors _celebrationStatusProvider above, for the other possible outcome of
+// an application decision. isScholar/isRejected are mutually exclusive by
+// construction (approval sets applicationStatus 'approved' + studentType
+// 'scholar'; rejection sets applicationStatus 'rejected' only), so the two
+// pending flags built from these can never both be true at once.
+final _rejectionStatusProvider = Provider<({bool isRejected, bool rejectionSeen})>((
+  ref,
+) {
+  final student = ref.watch(currentStudentProvider);
+  return (
+    isRejected: student?.applicationStatus == 'rejected',
+    rejectionSeen: student?.rejectionSeen ?? false,
+  );
+});
+
+/// Pure decision used by the router's redirect callback: where (if anywhere)
+/// to send the user based on rejection status. Mirrors
+/// [celebrationRedirectTarget] for the other outcome.
+String? rejectionRedirectTarget({
+  required bool rejectionPending,
+  required bool isViewingRejection,
+}) {
+  if (rejectionPending && !isViewingRejection) return '/rejection';
+  if (!rejectionPending && isViewingRejection) return '/dashboard';
+  return null;
+}
+
 /// Notifies go_router to re-run `redirect` for the CURRENT location (without
 /// recreating the router or losing navigation state) whenever the scholar's
-/// celebration status changes — e.g. the admin approves them while they're
-/// mid-session on some other screen.
-class _CelebrationRefreshNotifier extends ChangeNotifier {
-  late final ProviderSubscription _subscription;
+/// celebration OR rejection status changes — e.g. the admin decides on their
+/// application while they're mid-session on some other screen.
+class _DecisionRefreshNotifier extends ChangeNotifier {
+  late final ProviderSubscription _celebrationSubscription;
+  late final ProviderSubscription _rejectionSubscription;
 
-  _CelebrationRefreshNotifier(Ref ref) {
-    _subscription = ref.listen(_celebrationStatusProvider, (previous, next) {
+  _DecisionRefreshNotifier(Ref ref) {
+    _celebrationSubscription = ref.listen(_celebrationStatusProvider, (previous, next) {
+      if (previous != next) notifyListeners();
+    });
+    _rejectionSubscription = ref.listen(_rejectionStatusProvider, (previous, next) {
       if (previous != next) notifyListeners();
     });
   }
 
   @override
   void dispose() {
-    _subscription.close();
+    _celebrationSubscription.close();
+    _rejectionSubscription.close();
     super.dispose();
   }
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authStatus = ref.watch(_authStatusProvider);
-  final celebrationRefresh = _CelebrationRefreshNotifier(ref);
-  ref.onDispose(celebrationRefresh.dispose);
+  final decisionRefresh = _DecisionRefreshNotifier(ref);
+  ref.onDispose(decisionRefresh.dispose);
 
   return GoRouter(
     initialLocation: '/splash',
     debugLogDiagnostics: true,
-    refreshListenable: celebrationRefresh,
+    refreshListenable: decisionRefresh,
     redirect: (context, state) {
       final isLoggedIn = authStatus.isLoggedIn;
       final isInitialized = authStatus.isInitialized;
@@ -149,15 +182,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final celebrationPending = celebration.isScholar && !celebration.celebrationSeen;
       final isCelebrating = state.matchedLocation == '/celebration';
 
+      final rejection = ref.read(_rejectionStatusProvider);
+      final rejectionPending = rejection.isRejected && !rejection.rejectionSeen;
+      final isViewingRejection = state.matchedLocation == '/rejection';
+
       // If logged in and trying to access login, redirect to dashboard (or
-      // the celebration screen first, if it hasn't been seen yet).
+      // whichever one-time decision notice hasn't been seen yet — celebration
+      // and rejectionPending can never both be true, see _rejectionStatusProvider).
       if (isLoggedIn && isLoggingIn) {
-        return celebrationPending ? '/celebration' : '/dashboard';
+        if (celebrationPending) return '/celebration';
+        if (rejectionPending) return '/rejection';
+        return '/dashboard';
       }
 
-      return celebrationRedirectTarget(
+      final celebrationRedirect = celebrationRedirectTarget(
         celebrationPending: celebrationPending,
         isCelebrating: isCelebrating,
+      );
+      if (celebrationRedirect != null) return celebrationRedirect;
+
+      return rejectionRedirectTarget(
+        rejectionPending: rejectionPending,
+        isViewingRejection: isViewingRejection,
       );
     },
     routes: [
@@ -198,6 +244,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/celebration',
         name: 'celebration',
         builder: (context, state) => const CongratulationsScreen(),
+      ),
+      GoRoute(
+        path: '/rejection',
+        name: 'rejection',
+        builder: (context, state) => const RejectionScreen(),
       ),
       GoRoute(
         path: '/change-password',
@@ -261,6 +312,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 name: 'add-cor',
                 builder: (context, state) =>
                     const AddGradeScreen(corOnly: true),
+              ),
+              GoRoute(
+                path: 'add-cog',
+                name: 'add-cog',
+                builder: (context, state) =>
+                    const AddGradeScreen(cogOnly: true),
               ),
             ],
           ),

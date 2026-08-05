@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import '../models/models.dart';
@@ -30,6 +31,10 @@ class AttendanceProvider extends ChangeNotifier {
   bool _isProcessing = false;
   Event? _currentEvent;
 
+  List<Event> _events = [];
+  bool _eventsLoading = true;
+  StreamSubscription<List<Map<String, dynamic>>>? _eventsSubscription;
+
   /// Today's attendance records
   List<AttendanceRecord> get todayRecords => _todayRecords;
 
@@ -51,18 +56,62 @@ class AttendanceProvider extends ChangeNotifier {
   /// Current event
   Event? get currentEvent => _currentEvent;
 
-  /// All available events sorted by newest event date first
-  List<Event> get events {
-    final allEvents = _storageService.getAllEvents();
-    allEvents.sort((a, b) => b.date.compareTo(a.date));
-    return allEvents;
-  }
+  /// Events scheduled by the admin (newest/upcoming first). Empty until the
+  /// first live fetch resolves, unless a cached copy exists from a prior run.
+  List<Event> get events => _events;
+
+  /// Whether the initial live fetch of events is still in progress.
+  bool get eventsLoading => _eventsLoading;
 
   /// Initialize the provider
   Future<void> initialize() async {
     await _refreshData();
     _currentEvent = _storageService.getCurrentEvent();
-    _currentEvent ??= events.isNotEmpty ? events.first : null;
+    _subscribeToEvents();
+  }
+
+  /// Live-updates [events] from the admin-scheduled `events` Firestore
+  /// collection, caching each fetch locally so the picker still works
+  /// offline. Seeded from that cache immediately so the picker isn't empty
+  /// while the first live fetch is in flight.
+  void _subscribeToEvents() {
+    _events = _storageService.getAllEvents()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    _eventsSubscription = EventsService.eventsStream().listen((records) async {
+      final fetched = records.map(_eventFromRecord).toList();
+      _events = fetched;
+      _eventsLoading = false;
+      await _storageService.replaceEventsCache(fetched);
+
+      // If the previously-selected event was deleted or renamed by the
+      // admin, clear the selection so the operator picks again rather than
+      // keep scanning into an event that no longer exists.
+      if (_currentEvent != null &&
+          !fetched.any((e) => e.id == _currentEvent!.id)) {
+        _currentEvent = null;
+        await _storageService.clearCurrentEvent();
+      }
+
+      notifyListeners();
+    });
+  }
+
+  Event _eventFromRecord(Map<String, dynamic> record) {
+    return Event(
+      id: record['id']?.toString() ?? '',
+      name: record['name']?.toString() ?? 'Event',
+      date: _parseEventDate(record['date']),
+      isActive: true,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  DateTime _parseEventDate(dynamic value) {
+    if (value is String) {
+      return DateTime.tryParse(value) ?? DateTime.now();
+    }
+    return DateTime.now();
   }
 
   /// Refresh data from storage
@@ -72,12 +121,25 @@ class AttendanceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  @override
+  void dispose() {
+    _eventsSubscription?.cancel();
+    super.dispose();
+  }
+
   /// Process a scanned QR code
   Future<ScanResult> processQrCode(String qrData) async {
     if (_isProcessing) {
       return ScanResult(
         type: ScanResultType.error,
         message: 'Already processing a scan',
+      );
+    }
+
+    if (_currentEvent == null) {
+      return ScanResult(
+        type: ScanResultType.error,
+        message: 'Select an event before scanning',
       );
     }
 
@@ -97,8 +159,8 @@ class AttendanceProvider extends ChangeNotifier {
         return _lastScanResult!;
       }
 
-      // Get current event
-      final eventName = _currentEvent?.name ?? 'General Attendance';
+      // Current event is guaranteed non-null by the guard above.
+      final eventName = _currentEvent!.name;
 
       // Check for duplicate scan
       if (_storageService.isStudentScannedToday(studentId, eventName)) {
@@ -355,35 +417,6 @@ class AttendanceProvider extends ChangeNotifier {
     _currentEvent = event;
     await _storageService.setCurrentEvent(event.id);
     notifyListeners();
-  }
-
-  /// Create and store a new event, optionally selecting it as current
-  Future<Event> addEvent({
-    required String name,
-    String? description,
-    required DateTime date,
-    bool setAsCurrent = true,
-  }) async {
-    final event = Event(
-      id: _storageService.generateId(),
-      name: name.trim(),
-      description: description?.trim().isEmpty ?? true
-          ? null
-          : description!.trim(),
-      date: DateTime(date.year, date.month, date.day),
-      isActive: true,
-      createdAt: DateTime.now(),
-    );
-
-    await _storageService.addEvent(event);
-
-    if (setAsCurrent) {
-      await setCurrentEvent(event);
-    } else {
-      notifyListeners();
-    }
-
-    return event;
   }
 
   /// Get attendance records for a specific date

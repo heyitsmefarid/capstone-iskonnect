@@ -184,22 +184,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          // Logo circle
+                          // Logo circle — the real ISKONNECT mark rather than a
+                          // generic school icon. Solid white fill (not the
+                          // previous 15% translucent one) because the artwork
+                          // has a light background of its own, which would look
+                          // muddy over the dark header showing through.
                           Container(
                             width: 72,
                             height: 72,
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
+                              color: Colors.white,
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: Colors.white.withValues(alpha: 0.3),
                                 width: 2,
                               ),
                             ),
-                            child: const Icon(
-                              Icons.school_rounded,
-                              color: Colors.white,
-                              size: 36,
+                            child: ClipOval(
+                              child: Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: Image.asset(
+                                  'assets/images/app_logo.png',
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 16),

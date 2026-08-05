@@ -18,19 +18,19 @@ class BfcspFormException implements Exception {
   String toString() => message;
 }
 
-/// Client for the shared `generateApplicationForm` Cloud Function, which
-/// overlays the applicant's data onto the real official template PDF (logos
-/// included) so the output is identical to the printed form — the same
-/// generator the admin panel uses.
+/// Client for the shared `generateApplicationForm` endpoint (served by
+/// backend/functions/local-form-server.js — locally in development, hosted in
+/// production; see ApiConfig.formBaseUrl). It overlays the applicant's data
+/// onto the real official template PDF (logos included) so the output is
+/// identical to the printed form — the same generator the admin panel uses.
 ///
 /// There is deliberately no local/offline fallback: a divergent locally-drawn
-/// layout would not match the official document. If the service is
-/// unreachable the caller must surface that, which is why every failure here
-/// throws [BfcspFormException] with a specific reason rather than collapsing
-/// to a bare null. (The previous version returned null for *every* failure
-/// mode and the UI reported it as a connectivity problem, which hid the real
-/// cause: the endpoint answering HTTP 404 because the Cloud Functions
-/// codebase was never deployed.)
+/// layout would not match the official document, and Dart has no usable way to
+/// overlay onto an existing PDF template anyway (the `pdf` package can only
+/// import one via a concrete PdfDocumentParserBase, which is not shipped). If
+/// the service is unreachable the caller must surface that, which is why every
+/// failure here throws [BfcspFormException] naming the specific reason rather
+/// than collapsing to a bare null.
 class BfcspFormApi {
   const BfcspFormApi._();
 
@@ -61,6 +61,19 @@ class BfcspFormApi {
   /// answers with a non-200 status, or returns an empty body.
   static Future<Uint8List> generate(BfcspApplicationModel app) async {
     final endpoint = ApiConfig.generateApplicationForm;
+
+    // No form service configured (release build without FORM_BASE_URL). Say so
+    // outright instead of firing a request that cannot succeed — the previous
+    // fallback to the never-deployed Cloud Functions URL produced an opaque
+    // "Failed to fetch" that named the wrong cause.
+    if (endpoint.isEmpty) {
+      throw const BfcspFormException(
+        'No form service is configured for this build. Rebuild with '
+        '--dart-define=FORM_BASE_URL=<your form server URL> (see '
+        'backend/functions/local-form-server.js and render.yaml).',
+      );
+    }
+
     final http.Response response;
 
     try {
@@ -83,14 +96,10 @@ class BfcspFormApi {
     }
 
     if (response.statusCode == 404) {
-      // The single most likely cause, and the one that is invisible in local
-      // development: builds without a FORM_BASE_URL override fall back to the
-      // deployed Cloud Functions URL, so a codebase that was never deployed
-      // fails only in shipped builds.
       throw BfcspFormException(
-        'The form service returned 404 (not found) for $endpoint. '
-        'The generateApplicationForm Cloud Function does not appear to be '
-        'deployed for this project.',
+        'The form service at $endpoint answered 404 (not found). Something is '
+        'listening there, but it is not the BFCSP form server — check the '
+        'FORM_BASE_URL this build was given.',
       );
     }
 

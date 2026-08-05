@@ -1,15 +1,12 @@
-import { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useOutletContext } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import { StatCard } from '../components/common';
 import { formatPersonName } from '../utils/nameFormat';
 import {
-  Users,
   CheckCircle,
   Clock,
   DollarSign,
-  GraduationCap,
   AlertTriangle,
   Calendar,
   BookOpen,
@@ -30,7 +27,6 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { fetchReportSummary } from '../services/backendApi';
 
 const BAR_COLORS = ['#2d9596', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e'];
 
@@ -44,68 +40,89 @@ const PIE_COLORS = {
 };
 
 export default function Dashboard() {
-  const { applicants, schools, getStats } = useApp();
+  const { applicants, getStats, schoolYears, events } = useApp();
   const { onMenuClick } = useOutletContext() || {};
   const stats = getStats();
-  const [liveSummary, setLiveSummary] = useState(null);
 
-  useEffect(() => {
-    let mounted = true;
+  // The actual active term (set in School Year Management) — was previously
+  // a hardcoded "Academic Year 2025-2026" label that never changed no matter
+  // what term the admin activated.
+  const activeSy = schoolYears.find((s) => s.isActive);
+  const activeSem = activeSy?.semesters?.find((s) => s.isActive);
+  const activeTermLabel = activeSy && activeSem
+    ? `${activeSem.name}, A.Y. ${activeSy.label}`
+    : 'No active term set';
 
-    fetchReportSummary()
-      .then((response) => {
-        if (!mounted || !response?.summary) {
-          return;
-        }
-
-        setLiveSummary(response.summary);
-      })
-      .catch(() => {
-        if (mounted) {
-          setLiveSummary(null);
-        }
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  // The getReportSummary fetch that used to live here has been removed along
+  // with the two card values it fed. It returns 404 (the Cloud Functions
+  // codebase is not deployed for this project), so it never produced data —
+  // and its fallback was not equivalent to its success path: the "Total
+  // Scholars" card showed active scholars when the call succeeded but every
+  // applicant, pending included, when it failed. Both cards now read from the
+  // same local `applicants` collection as the rest of the page.
 
   /* ─── Computed metrics ─── */
 
-  // Financial: Funds released this semester
-  const fundsReleasedThisSemester = applicants
-    .filter(
-      (a) =>
-        (a.status === 'active' || a.status === 'approved') &&
-        a.disbursementStatus === 'Completed'
-    )
-    .reduce((sum, s) => sum + (s.amountGranted || 0), 0);
+  // Financial: the real disbursement ledger is enrolledSemesters (one entry
+  // per granted term — see grantSemesterIfNeeded in AppContext.jsx), not
+  // amountGranted (only ever holds the MOST RECENTLY granted semester's
+  // amount, overwritten on every new grant, never summed) or
+  // disbursementStatus (read here but never actually written to 'Completed'
+  // by any current flow, so filtering on it always matched nothing — this is
+  // why "Released This Semester" was stuck at ₱0). Mirrors the same
+  // enrolledSemesters-based math already trusted in Scholars.jsx's own
+  // "Total Granted" figure. On-hold semesters received no grant and are
+  // excluded, matching that same logic.
+  const grantedAmountsOf = (applicant, { termOnly } = {}) =>
+    (applicant.enrolledSemesters || [])
+      .filter((e) => {
+        if (e.status === 'on_hold') return false;
+        if (!termOnly) return true;
+        return activeSy && activeSem && e.schoolYear === activeSy.label && e.semester === activeSem.name;
+      })
+      .reduce((sum, e) => sum + (typeof e.grantedAmount === 'number' ? e.grantedAmount : 0), 0);
 
-  // Graduation progress rate
-  const totalAwarded = applicants.filter((a) => a.status !== 'pending').length;
-  const graduated = applicants.filter((a) => a.status === 'graduated').length;
-  const graduationRate = totalAwarded > 0 ? ((graduated / totalAwarded) * 100).toFixed(1) : '0';
+  const fundsReleasedThisSemester = applicants.reduce(
+    (sum, a) => sum + grantedAmountsOf(a, { termOnly: true }),
+    0
+  );
+  const totalReleasedAllSchoolYears = applicants.reduce(
+    (sum, a) => sum + grantedAmountsOf(a),
+    0
+  );
+
+  // Graduation rate was dropped from the cards: its denominator counted every
+  // non-pending applicant (terminated and on-hold included), so it was not a
+  // success rate, and for a programme whose first cohort has not graduated it
+  // reads 0.0% indefinitely. Graduated headcount remains on the status donut
+  // and the status chips below.
 
   // Pending Interviews
   const pendingInterviews = applicants.filter(
     (a) => a.interviewStatus === 'pending'
   ).length;
 
-  // At-risk scholars (GWA > 2.5 or high absences) — aligned with scholar-ui evaluation rules
+  // At-risk scholars (GWA > 2.5 or high absences) — aligned with scholar-ui evaluation rules.
+  //
+  // Absences are counted only against events that still exist. A deleted event
+  // leaves its records behind on each scholar's document, and counting those
+  // kept flagging scholars for absences from events the admin had removed.
+  const scheduledEventNames = new Set(events.map((e) => e.name));
   const atRiskScholars = applicants.filter((a) => {
     if (a.status !== 'active') return false;
-    const absences = (a.attendance || []).filter((att) => !att.present).length;
+    const absences = (a.attendance || []).filter(
+      (att) => !att.present && scheduledEventNames.has(att.activity)
+    ).length;
     return (a.gwa && a.gwa > 2.5) || absences >= 2;
   });
 
-  // Average GWA of active scholars
   const activeScholars = applicants.filter((a) => a.status === 'active');
-  const scholarsWithGwa = activeScholars.filter((a) => a.gwa && a.gwa > 0);
-  const averageGwa =
-    scholarsWithGwa.length > 0
-      ? (scholarsWithGwa.reduce((sum, a) => sum + a.gwa, 0) / scholarsWithGwa.length).toFixed(2)
-      : 'N/A';
+
+  // Average GWA was dropped from the cards: it read "N/A" whenever no scholar
+  // had a GWA on file, which is exactly the situation early in a term, and it
+  // averaged whatever happened to be recorded rather than tracking the grade
+  // workflow the office actually runs. Replaced by the submitted/evaluated
+  // counts computed below.
 
   // Requirements completion rate
   const pendingApplicants = applicants.filter((a) => a.status === 'pending');
@@ -116,6 +133,28 @@ export default function Dashboard() {
     pendingApplicants.length > 0
       ? ((applicantsWithCompleteReqs.length / pendingApplicants.length) * 100).toFixed(0)
       : '100';
+
+  // Grade workflow for the active term. These mirror AcademicRecords' own
+  // definitions exactly so the two pages cannot drift apart: "submitted"
+  // means the scholar has grade records filed against the active school year
+  // + semester, "evaluated" means an admin has confirmed that term's grades
+  // (status 'confirmed' — 'revision' and 'pending' do not count).
+  const activeTermKey =
+    activeSy && activeSem ? `${activeSy.label}::${activeSem.name}` : null;
+
+  const gradesSubmittedCount = activeTermKey
+    ? activeScholars.filter((s) =>
+        (s.grades || []).some(
+          (r) => r.schoolYear === activeSy.label && r.semester === activeSem.name
+        )
+      ).length
+    : 0;
+
+  const gradesEvaluatedCount = activeTermKey
+    ? activeScholars.filter(
+        (s) => (s.gradesEvaluation || {})[activeTermKey]?.status === 'confirmed'
+      ).length
+    : 0;
 
   const statusCounts = {
     active: applicants.filter((a) => a.status === 'active').length,
@@ -133,46 +172,66 @@ export default function Dashboard() {
     year: 'numeric',
   });
 
+  // Peso amounts are shown in full rather than scaled to millions: this
+  // programme disburses in the thousands-to-low-millions range, where
+  // "₱0.00M" rounds every real figure away to nothing.
+  const peso = (amount) => `₱${Math.round(amount || 0).toLocaleString('en-PH')}`;
+
+  // Chosen for what the office has to act on each day, in priority order:
+  // who is being supported, what is waiting in the queue, who is about to
+  // lose their grant, what has been paid out, and how the cohort is doing
+  // academically. Headcount by status is deliberately left to the status
+  // donut chart below rather than repeated as a card.
   const statCards = [
     {
-      title: 'Total Scholars',
-      value: liveSummary?.activeScholars ?? stats.total,
-      icon: Users,
-      color: 'blue',
-      trend: `${stats.maleCount}M / ${stats.femaleCount}F`,
-      description: 'All applicants & scholars',
-    },
-    {
       title: 'Active Scholars',
-      value: stats.active,
+      value: statusCounts.active,
       icon: CheckCircle,
       color: 'green',
-      trend: `${activeApprovedTotal} enrolled`,
+      trend: statusCounts.approved > 0 ? `+${statusCounts.approved} awarded` : 'all enrolled',
       description: 'Currently enrolled',
     },
     {
-      title: 'Funds Released',
-      value: `₱${(fundsReleasedThisSemester / 1000000).toFixed(2)}M`,
-      icon: DollarSign,
-      color: 'blue',
-      trend: `₱${(stats.totalGranted / 1000000).toFixed(1)}M total`,
-      description: 'This semester',
-    },
-    {
       title: 'Pending Applications',
-      value: liveSummary?.applications ? Math.max(0, liveSummary.applications - liveSummary.activeScholars) : statusCounts.pending,
+      value: statusCounts.pending,
       icon: Clock,
       color: 'yellow',
-      trend: `${pendingInterviews} interviews`,
+      // How many can actually be acted on now, which is the number that
+      // decides whether it is worth opening the queue — more useful than a
+      // raw interview count.
+      trend: `${applicantsWithCompleteReqs.length} ready to review`,
       description: 'Awaiting review',
     },
     {
-      title: 'Graduation Rate',
-      value: `${graduationRate}%`,
-      icon: GraduationCap,
+      title: 'At-Risk Scholars',
+      value: atRiskScholars.length,
+      icon: ShieldAlert,
+      color: 'red',
+      trend: statusCounts.onHold > 0 ? `${statusCounts.onHold} on hold` : 'none on hold',
+      description: 'GWA above 2.5 or 2+ absences',
+    },
+    {
+      // Current-semester figure is the badge at the top of the card (most
+      // actionable — what the office released THIS term); the all-school-year
+      // running total sits below as the main number, for the bigger picture.
+      title: 'Total Grant Released',
+      value: peso(totalReleasedAllSchoolYears),
+      icon: DollarSign,
+      color: 'blue',
+      trend: `${peso(fundsReleasedThisSemester)} this semester`,
+      description: 'All school years',
+    },
+    {
+      title: 'Grades Submitted',
+      value: gradesSubmittedCount,
+      icon: TrendingUp,
       color: 'purple',
-      trend: `${graduated} graduated`,
-      description: 'Success rate',
+      // The gap between these two numbers is the evaluation backlog — the
+      // work the office still owes this term.
+      trend: `${gradesEvaluatedCount} evaluated`,
+      description: activeSem
+        ? `of ${activeScholars.length} active scholars`
+        : 'No active term set',
     },
   ];
 
@@ -181,13 +240,25 @@ export default function Dashboard() {
     fill: BAR_COLORS[index % BAR_COLORS.length],
   }));
 
+  // Standing of scholars currently in the programme: active versus on hold.
+  //
+  // Pending/graduated/terminated were removed. Pending in particular counts
+  // *applicants*, not scholars, so including it made the chart answer a
+  // different question than its title asked — and the cards above already
+  // report the pending queue on their own.
+  //
+  // Uses statusCounts.active rather than active+approved so the slice agrees
+  // with the Active Scholars card; approved-but-not-yet-enrolled scholars are
+  // reported there as the "+N awarded" trend.
+  //
+  // Neither slice is dropped at zero: "On Hold: 0" is a useful explicit
+  // statement, whereas removing the slice leaves no way to tell "none on
+  // hold" apart from "not tracked".
   const statusPieData = [
-    { name: 'Active', value: activeApprovedTotal, color: PIE_COLORS.active },
+    { name: 'Active', value: statusCounts.active, color: PIE_COLORS.active },
     { name: 'On Hold', value: statusCounts.onHold, color: PIE_COLORS['on-hold'] },
-    { name: 'Graduated', value: statusCounts.graduated, color: PIE_COLORS.graduated },
-    { name: 'Terminated', value: statusCounts.terminated, color: PIE_COLORS.terminated },
-    { name: 'Pending', value: statusCounts.pending, color: PIE_COLORS.pending },
-  ].filter((d) => d.value > 0);
+  ];
+  const statusPieTotal = statusPieData.reduce((sum, d) => sum + d.value, 0);
 
   // Recent applicants
   const recentApplicants = [...applicants]
@@ -219,7 +290,7 @@ export default function Dashboard() {
               <Calendar size={14} />
               <span>As of {todayLabel}</span>
               <span className="hero-divider" />
-              <span>Academic Year 2025-2026</span>
+              <span>{activeTermLabel}</span>
             </div>
             <div className="hero-metrics">
               <div className="hero-metric">
@@ -311,36 +382,52 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Scholar Status Distribution Pie Chart */}
+          {/* Active vs On Hold Pie Chart */}
           <div className="chart-card">
-            <h3 className="chart-title">Scholar Status Distribution</h3>
+            <h3 className="chart-title">Active vs On Hold</h3>
             <div className="chart-container">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={statusPieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={3}
-                    dataKey="value"
-                    label={({ name, value }) => `${name}: ${value}`}
-                  >
-                    {statusPieData.map((entry, index) => (
-                      <Cell key={index} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'var(--card-bg)',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                    }}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              {statusPieTotal === 0 ? (
+                // Recharts would otherwise draw an empty ring with a legend,
+                // which reads as a rendering fault rather than "no scholars".
+                <div
+                  style={{
+                    height: 300,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  No scholars are enrolled yet.
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={statusPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={100}
+                      paddingAngle={3}
+                      dataKey="value"
+                      label={({ name, value }) => `${name}: ${value}`}
+                    >
+                      {statusPieData.map((entry, index) => (
+                        <Cell key={index} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'var(--card-bg)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
@@ -383,8 +470,11 @@ export default function Dashboard() {
                 <>
                   {/* At-risk scholars */}
                   {atRiskScholars.slice(0, 3).map((scholar) => {
+                    // Same scheduled-events-only rule as the at-risk filter
+                    // above, so the number quoted here matches why they were
+                    // flagged.
                     const absences = (scholar.attendance || []).filter(
-                      (a) => !a.present
+                      (a) => !a.present && scheduledEventNames.has(a.activity)
                     ).length;
                     return (
                       <div key={`risk-${scholar.id}`} className="alert-item alert-danger">

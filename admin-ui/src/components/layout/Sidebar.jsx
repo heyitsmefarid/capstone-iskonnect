@@ -28,6 +28,7 @@ import {
   Archive,
   GraduationCap,
   UserX,
+  Database,
 } from 'lucide-react';
 
 const menuItems = [
@@ -35,6 +36,8 @@ const menuItems = [
   {
     icon: FileText,
     label: 'Applications',
+    // Viewer is read-only and limited to Dashboard/Scholars/Attendance/Academic Records.
+    roles: ['admin', 'staff'],
     submenu: [
       { path: '/applications', label: 'All Applications' },
     ],
@@ -46,16 +49,17 @@ const menuItems = [
       { path: '/scholars', label: 'Scholars List' },
       { path: '/attendance', icon: Calendar, label: 'Attendance' },
       { path: '/academic-records', icon: BookOpen, label: 'Academic Records' },
-      { path: '/evaluation', icon: ClipboardCheck, label: 'Scholar Evaluation' },
-      { path: '/timeline', icon: TrendingUp, label: 'Scholarship Timeline' },
+      { path: '/evaluation', icon: ClipboardCheck, label: 'Scholar Evaluation', roles: ['admin', 'staff'] },
+      { path: '/timeline', icon: TrendingUp, label: 'Scholarship Timeline', roles: ['admin', 'staff'] },
     ],
   },
-  { path: '/announcements', icon: Megaphone, label: 'Announcements' },
-  { path: '/messages', icon: MessageCircle, label: 'Messages' },
-  { path: '/reports', icon: BarChart3, label: 'Reports' },
+  { path: '/announcements', icon: Megaphone, label: 'Announcements', roles: ['admin', 'staff'] },
+  { path: '/messages', icon: MessageCircle, label: 'Messages', roles: ['admin', 'staff'] },
+  { path: '/reports', icon: BarChart3, label: 'Reports', roles: ['admin', 'staff'] },
   {
     icon: Archive,
     label: 'History',
+    roles: ['admin', 'staff'],
     submenu: [
       { path: '/applicant-history', icon: UserX, label: 'Applicant History' },
       { path: '/scholar-history', icon: GraduationCap, label: 'Scholar History' },
@@ -63,15 +67,19 @@ const menuItems = [
   },
   // Admin-only: staff do not manage other staff.
   { path: '/staff-management', icon: UserCog, label: 'Staff Management', roles: ['admin'] },
-  { path: '/user-management', icon: UserCog, label: 'User Management' },
+  { path: '/user-management', icon: UserCog, label: 'User Management', roles: ['admin', 'staff'] },
   {
     icon: Settings,
     label: 'Administration',
+    roles: ['admin', 'staff'],
     submenu: [
       { path: '/system-settings', icon: Settings, label: 'System Settings' },
       { path: '/school-years', icon: CalendarDays, label: 'School Years' },
       // Admin-only: the audit trail is visible to administrators only.
       { path: '/audit-logs', icon: Shield, label: 'Audit Logs', roles: ['admin'] },
+      // Admin-only: a full-database restore can overwrite live records —
+      // restrict to the same audience as the audit trail.
+      { path: '/backup-restore', icon: Database, label: 'Backup & Restore', roles: ['admin'] },
     ],
   },
 ];

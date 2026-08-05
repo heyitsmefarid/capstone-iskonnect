@@ -47,6 +47,12 @@ class StudentModel {
   // Set once the approval celebration screen has played for this account, so
   // it never replays (any device — this travels with the Firestore doc).
   final bool celebrationSeen;
+  // The admin's typed-in reason when applicationStatus is 'rejected' (see
+  // the "Reject" flows in admin-ui's Applications.jsx).
+  final String? rejectionReason;
+  // Set once the rejection screen has played for this account — the same
+  // one-time-notice pattern as celebrationSeen, just for the other outcome.
+  final bool rejectionSeen;
   // Admin's manual confirmation that the scholar is enrolled for the term —
   // set via the admin-ui Scholars page. 'Verified' unlocks Add COG/COR/Subject.
   final String? enrollmentStatus;
@@ -106,6 +112,8 @@ class StudentModel {
     this.economicScore,
     this.examScore,
     this.celebrationSeen = false,
+    this.rejectionReason,
+    this.rejectionSeen = false,
     this.enrollmentStatus,
     this.uid,
     this.mustChangePassword = false,
@@ -162,6 +170,36 @@ class StudentModel {
 
   String get fullAddress {
     return '$houseNo $street, Brgy. $barangay, $city, $province';
+  }
+
+  /// Barangay and city only — the form used on the ID card.
+  ///
+  /// House number, street/sitio and province are dropped: the card's address
+  /// sits on one narrow line beside the QR code, and the finer detail only
+  /// shrinks the text without helping identify the holder. The "Brgy." prefix
+  /// goes too, since the card's own printed "ADDRESS" label supplies the
+  /// context. [fullAddress] keeps the complete form for the profile screen.
+  ///
+  /// Blank parts are skipped so an incomplete record can't produce a stray
+  /// leading or doubled comma.
+  String get idCardAddress {
+    return [barangay, _cityWithCitySuffix]
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .join(', ');
+  }
+
+  /// [city] is stored bare ("Calapan"), but the card should read the full
+  /// "Calapan City", matching how the issuing office brands itself.
+  ///
+  /// Only appended when absent, so a record already stored as "Calapan City"
+  /// is not turned into "Calapan City City".
+  String get _cityWithCitySuffix {
+    final trimmed = city.trim();
+    if (trimmed.isEmpty) return '';
+    final alreadyHasSuffix =
+        RegExp(r'\bcity\b', caseSensitive: false).hasMatch(trimmed);
+    return alreadyHasSuffix ? trimmed : '$trimmed City';
   }
 
   int get age {
@@ -231,6 +269,8 @@ class StudentModel {
     int? economicScore,
     double? examScore,
     bool? celebrationSeen,
+    String? rejectionReason,
+    bool? rejectionSeen,
     String? enrollmentStatus,
     String? uid,
     bool? mustChangePassword,
@@ -275,6 +315,8 @@ class StudentModel {
       economicScore: economicScore ?? this.economicScore,
       examScore: examScore ?? this.examScore,
       celebrationSeen: celebrationSeen ?? this.celebrationSeen,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      rejectionSeen: rejectionSeen ?? this.rejectionSeen,
       enrollmentStatus: enrollmentStatus ?? this.enrollmentStatus,
       uid: uid ?? this.uid,
       mustChangePassword: mustChangePassword ?? this.mustChangePassword,
@@ -323,6 +365,8 @@ class StudentModel {
       'economicScore': economicScore,
       'examScore': examScore,
       'celebrationSeen': celebrationSeen,
+      'rejectionReason': rejectionReason,
+      'rejectionSeen': rejectionSeen,
       'enrollmentStatus': enrollmentStatus,
       'uid': uid,
       'mustChangePassword': mustChangePassword,
@@ -382,6 +426,8 @@ class StudentModel {
       economicScore: (json['economicScore'] as num?)?.toInt(),
       examScore: (json['examScore'] as num?)?.toDouble(),
       celebrationSeen: json['celebrationSeen'] == true,
+      rejectionReason: json['rejectionReason']?.toString(),
+      rejectionSeen: json['rejectionSeen'] == true,
       enrollmentStatus: json['enrollmentStatus']?.toString(),
       uid: json['uid']?.toString(),
       mustChangePassword: json['mustChangePassword'] == true,

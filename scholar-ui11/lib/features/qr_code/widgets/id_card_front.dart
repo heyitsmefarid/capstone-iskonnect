@@ -83,14 +83,22 @@ class IdCardFront extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        // Outfit at its heaviest weight: a geometric display
+                        // sans much closer to the reference artwork's poster
+                        // lettering than Fredoka's rounded terminals, and it
+                        // holds its shape at the small sizes a phone renders
+                        // this card at. Slight negative tracking tightens the
+                        // caps into a solid block.
                         Text(student.firstName.toUpperCase(),
                             textAlign: TextAlign.center,
-                            style: GoogleFonts.fredoka(
-                                fontWeight: FontWeight.w700, height: 1.0, color: _kNameFirstColor)),
+                            style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w900, height: 1.0,
+                                letterSpacing: -0.5, color: _kNameFirstColor)),
                         Text('$middleInitial${student.lastName.toUpperCase()}',
                             textAlign: TextAlign.center,
-                            style: GoogleFonts.fredoka(
-                                fontWeight: FontWeight.w700, height: 1.0, color: _kNameLastColor)),
+                            style: GoogleFonts.outfit(
+                                fontWeight: FontWeight.w900, height: 1.0,
+                                letterSpacing: -0.5, color: _kNameLastColor)),
                       ],
                     ),
                   ),
@@ -111,14 +119,22 @@ class IdCardFront extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
+                        // Barlow Semi Condensed, not a normal-width face: it is
+                        // a genuine functional win here, since program names
+                        // like "BACHELOR OF SCIENCE IN ACCOUNTANCY" are long
+                        // and a condensed face fits far more characters before
+                        // the FittedBox has to shrink the whole block. Positive
+                        // tracking keeps it legible despite the narrower forms.
                         Text(student.schoolName.toUpperCase(),
                             textAlign: TextAlign.center,
-                            style: GoogleFonts.fredoka(
-                                fontWeight: FontWeight.w500, height: 1.15, color: _kSchoolTextColor)),
+                            style: GoogleFonts.barlowSemiCondensed(
+                                fontWeight: FontWeight.w600, height: 1.12,
+                                letterSpacing: 0.4, color: _kSchoolTextColor)),
                         Text(student.academicProgram.toUpperCase(),
                             textAlign: TextAlign.center,
-                            style: GoogleFonts.fredoka(
-                                fontWeight: FontWeight.w600, height: 1.15, color: _kSchoolTextColor)),
+                            style: GoogleFonts.barlowSemiCondensed(
+                                fontWeight: FontWeight.w700, height: 1.12,
+                                letterSpacing: 0.4, color: _kSchoolTextColor)),
                       ],
                     ),
                   ),

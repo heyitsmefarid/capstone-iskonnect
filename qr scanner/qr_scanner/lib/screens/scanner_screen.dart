@@ -442,7 +442,7 @@ class _ScannerScreenState extends State<ScannerScreen>
     final attendanceProvider = context.watch<AttendanceProvider>();
     final selectedEvent = attendanceProvider.currentEvent;
     final eventLabel = selectedEvent == null
-        ? 'General'
+        ? 'Select event'
         : '${selectedEvent.name} • ${DateTimeUtils.formatShortDate(selectedEvent.date)}';
 
     return SafeArea(
@@ -550,14 +550,6 @@ class _ScannerScreenState extends State<ScannerScreen>
                         ),
                       ),
                       const Spacer(),
-                      TextButton.icon(
-                        onPressed: () => _showAddEventDialog(context),
-                        icon: Icon(
-                          Icons.add_rounded,
-                          color: colorScheme.primary,
-                        ),
-                        label: const Text('Add Event'),
-                      ),
                       IconButton(
                         onPressed: () => Navigator.pop(context),
                         icon: Icon(Icons.close, color: colorScheme.onSurface),
@@ -570,6 +562,37 @@ class _ScannerScreenState extends State<ScannerScreen>
                   child: Consumer<AttendanceProvider>(
                     builder: (context, provider, _) {
                       final events = provider.events;
+
+                      if (provider.eventsLoading && events.isEmpty) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      }
+
+                      if (events.isEmpty) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.event_busy_rounded,
+                                  size: 40,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'No events scheduled yet',
+                                  style: TextStyle(
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
 
                       return ListView.builder(
                         itemCount: events.length,
@@ -615,102 +638,6 @@ class _ScannerScreenState extends State<ScannerScreen>
     );
   }
 
-  Future<void> _showAddEventDialog(BuildContext context) async {
-    final attendanceProvider = context.read<AttendanceProvider>();
-    final eventNameController = TextEditingController();
-    final eventDescriptionController = TextEditingController();
-    DateTime selectedDate = DateTime.now();
-
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Add Event'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: eventNameController,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Event Name',
-                        hintText: 'e.g., Youth Seminar',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: eventDescriptionController,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        labelText: 'Description (Optional)',
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Event Date'),
-                      subtitle: Text(DateTimeUtils.formatDate(selectedDate)),
-                      trailing: Icon(
-                        Icons.calendar_month_rounded,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      onTap: () async {
-                        final pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                        );
-
-                        if (pickedDate != null) {
-                          setDialogState(() {
-                            selectedDate = pickedDate;
-                          });
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    final eventName = eventNameController.text.trim();
-                    if (eventName.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Event name is required')),
-                      );
-                      return;
-                    }
-
-                    await attendanceProvider.addEvent(
-                      name: eventName,
-                      description: eventDescriptionController.text,
-                      date: selectedDate,
-                      setAsCurrent: true,
-                    );
-
-                    if (context.mounted) {
-                      Navigator.pop(dialogContext);
-                    }
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
 }
 
 enum CornerPosition { topLeft, topRight, bottomLeft, bottomRight }

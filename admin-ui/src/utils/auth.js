@@ -18,11 +18,12 @@ try {
   localStorage.removeItem(NAME_KEY);
 } catch { /* ignore */ }
 
-export const ROLES = { ADMIN: 'admin', STAFF: 'staff' };
+export const ROLES = { ADMIN: 'admin', STAFF: 'staff', VIEWER: 'viewer' };
 
 export const ROLE_LABELS = {
   admin: 'CED Administrator',
   staff: 'CED Staff',
+  viewer: 'CED Viewer',
 };
 
 export function setSession({ username, role }) {
@@ -55,4 +56,10 @@ export function getRoleLabel() {
 
 export function isAdmin() {
   return getRole() === ROLES.ADMIN;
+}
+
+// Viewer can see Dashboard, Scholars List, Attendance, and Academic Records,
+// but never add/edit/delete anything on those pages.
+export function canEdit() {
+  return getRole() !== ROLES.VIEWER;
 }

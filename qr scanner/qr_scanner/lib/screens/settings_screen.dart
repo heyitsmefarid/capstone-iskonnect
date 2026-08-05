@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/providers.dart';
 import '../services/services.dart';
-import '../models/models.dart';
 import '../theme/app_theme.dart';
 
 /// Settings screen for app configuration
@@ -33,11 +32,6 @@ class SettingsScreen extends StatelessWidget {
           // Appearance section
           _buildSectionHeader(context, 'Appearance'),
           _buildAppearanceCard(context, settingsProvider),
-          const SizedBox(height: 24),
-
-          // Event management section
-          _buildSectionHeader(context, 'Event Management'),
-          _buildEventsCard(context),
           const SizedBox(height: 24),
 
           // Data section
@@ -190,30 +184,6 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEventsCard(BuildContext context) {
-    final events = StorageService().getAllEvents();
-
-    return Card(
-      child: Column(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.event_rounded),
-            title: const Text('Manage Events'),
-            subtitle: Text('${events.length} event(s) configured'),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            onTap: () => _showEventsDialog(context),
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.add_rounded),
-            title: const Text('Add New Event'),
-            onTap: () => _showAddEventDialog(context),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDataCard(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final attendanceProvider = context.read<AttendanceProvider>();
@@ -232,120 +202,6 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-
-  void _showEventsDialog(BuildContext context) {
-    final events = StorageService().getAllEvents();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Events'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: events.length,
-              itemBuilder: (context, index) {
-                final event = events[index];
-                return ListTile(
-                  leading: const Icon(Icons.event_rounded),
-                  title: Text(event.name),
-                  subtitle: event.description != null
-                      ? Text(event.description!)
-                      : null,
-                  trailing: Switch(
-                    value: event.isActive,
-                    onChanged: (value) async {
-                      event.isActive = value;
-                      await StorageService().updateEvent(event);
-                      if (!context.mounted) return;
-                      Navigator.pop(context);
-                      _showEventsDialog(context);
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showAddEventDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    final descController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add Event'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Event Name',
-                  prefixIcon: Icon(Icons.event_rounded),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
-                  prefixIcon: Icon(Icons.description_rounded),
-                ),
-                maxLines: 2,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (nameController.text.isNotEmpty) {
-                  final event = Event(
-                    id: StorageService().generateId(),
-                    name: nameController.text,
-                    description: descController.text.isNotEmpty
-                        ? descController.text
-                        : null,
-                    date: DateTime.now(),
-                    isActive: true,
-                    createdAt: DateTime.now(),
-                  );
-                  await StorageService().addEvent(event);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Event added successfully'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text('Add'),
-            ),
-          ],
-        );
-      },
     );
   }
 

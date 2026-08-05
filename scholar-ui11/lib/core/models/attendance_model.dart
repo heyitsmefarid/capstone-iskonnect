@@ -77,7 +77,4 @@ class AttendanceSummary {
   double get attendancePercentage => attendanceRate * 100;
 
   int get remainingAllowedAbsences => (2 - absent).clamp(0, 2);
-
-  // Convenience getter for screen compatibility
-  int get excused => 0; // No excused tracking in current model
 }

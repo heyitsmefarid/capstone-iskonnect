@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { useOutletContext } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import Swal from 'sweetalert2';
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 import { matchesExact, matchesSearch } from '../utils/filtering';
 import { formatPersonName } from '../utils/nameFormat';
 import {
@@ -25,30 +27,79 @@ import {
   ArrowDown,
   ChevronLeft,
   ChevronRight,
+  Save,
+  Download,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { canEdit } from '../utils/auth';
 
 export default function Attendance() {
-  const { applicants, schools, activities, addActivity, updateActivity, deleteActivity, updateApplicant } = useApp();
+  const { applicants, catalogSchools, schoolYears, events, addEvent, updateEvent, deleteEvent, updateApplicant } = useApp();
   const { onMenuClick } = useOutletContext() || {};
+  // Viewer role: read-only on this page — every add/edit/delete control below
+  // is gated behind this.
+  const editAllowed = canEdit();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSchool, setFilterSchool] = useState('');
-  const [selectedActivity, setSelectedActivity] = useState(null);
-  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [showEventModal, setShowEventModal] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [showScholarDetailsModal, setShowScholarDetailsModal] = useState(false);
   const [selectedScholar, setSelectedScholar] = useState(null);
-  const [activityForm, setActivityForm] = useState({ name: '', date: '', required: true });
+  const [eventForm, setEventForm] = useState({ name: '', date: '', startTime: '', endTime: '', schoolYear: '', semester: '' });
   const [attendanceLogs, setAttendanceLogs] = useState([]);
-  const [showActivitiesSection, setShowActivitiesSection] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ column: 'scholar', direction: 'asc' });
+  // Which term the Attendance Details modal is showing — defaults to the
+  // active term (see viewScholarDetails) and reset each time it's reopened.
+  // null means "All Terms" (full history).
+  const [detailsTerm, setDetailsTerm] = useState(null);
+
+  // The currently active School Year + Semester (configured in School Year
+  // Management) — used to default a newly-created event to the current term.
+  const activeTerm = (() => {
+    for (const sy of schoolYears) {
+      const activeSem = (sy.semesters || []).find(s => s.isActive);
+      if (sy.isActive && activeSem) return { schoolYear: sy.label, semester: activeSem.name };
+    }
+    return null;
+  })();
+
+  // Every configured term (school year + semester), most recent first — for
+  // the Attendance Details modal's term picker, so the admin can look up any
+  // past semester's records instead of only ever seeing the current one.
+  const termOptions = schoolYears
+    .flatMap((sy) => (sy.semesters || []).map((sem) => ({
+      schoolYear: sy.label,
+      semester: sem.name,
+      order: sem.order,
+      startYear: sy.startYear,
+      isActive: !!sy.isActive && !!sem.isActive,
+    })))
+    .sort((a, b) => (b.startYear - a.startYear) || (b.order - a.order));
 
   // Get scholars (active, on-hold, graduated) - not applicants
   const scholars = applicants.filter(a => ['active', 'on-hold', 'graduated'].includes(a.status));
 
+  // School filter options: the eligible-schools catalog (managed in System
+  // Settings) PLUS any school that actually appears on a scholar record
+  // (covers schools not in the catalog).
+  const schoolFilterOptions = Array.from(new Set([
+    ...(catalogSchools || []).map(s => s?.name).filter(Boolean),
+    ...scholars.map(s => s?.school).filter(Boolean),
+  ]))
+    .sort((a, b) => a.localeCompare(b));
+
+  // St. Augustine Seminary students are exempt from attendance requirements
+  // (matches student_model.dart's isStAugustine on the scholar app — the
+  // school name has to match exactly what scholars actually register under,
+  // not a different/legacy catalog name).
+  const isExemptFromAttendance = (applicant) => applicant?.school === 'St. Augustine Seminary';
+
+  // Search/school-matched scholars, including exempt ones — the main table
+  // still shows them, just marked "Exempted" instead of a real count.
   const filteredApplicants = scholars.filter(applicant => {
     const matchesSearchTerm = matchesSearch(
       [
@@ -60,10 +111,13 @@ export default function Attendance() {
       searchTerm
     );
     const matchesSchool = matchesExact(applicant.school, filterSchool);
-    // St. Augustine students are exempt from attendance
-    const isStAugustine = applicant.school === 'St. Augustine Academy';
-    return matchesSearchTerm && matchesSchool && !isStAugustine;
+    return matchesSearchTerm && matchesSchool;
   });
+
+  // Scholars actually eligible to have attendance marked/counted (excludes
+  // exempt scholars) — used for the per-event marking modal and the
+  // absence-based stat counters, which don't apply to exempt scholars.
+  const attendanceEligibleApplicants = filteredApplicants.filter(a => !isExemptFromAttendance(a));
 
   useEffect(() => {
     setCurrentPage(1);
@@ -81,49 +135,99 @@ export default function Attendance() {
     return sortConfig.direction === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
   };
 
-  const getAbsenceCount = (applicant) => {
-    if (!applicant.attendance) return 0;
-    return activities.filter(act => {
-      const attended = applicant.attendance.find(a => a.activity === act.name);
-      return act.required && (!attended || !attended.present);
+  // An event only counts toward absence once its end time has actually
+  // passed — a scholar shouldn't be marked absent for an event that's still
+  // upcoming or currently in progress. Events saved before this feature (or
+  // left blank) fall back to end-of-day, so they still need the full day to
+  // pass rather than counting absent the instant they're created.
+  const hasEventEnded = (event) => {
+    if (!event?.date) return false;
+    const endDateTime = new Date(`${event.date}T${event.endTime || '23:59'}:00`);
+    if (Number.isNaN(endDateTime.getTime())) return false;
+    return Date.now() > endDateTime.getTime();
+  };
+
+  // Only events scheduled for the given term count toward absences — an
+  // absence from a semester that has already ended shouldn't keep counting
+  // (or trigger termination) once a new term has started. Defaults to the
+  // active term (every call site outside the Attendance Details modal wants
+  // that); the modal passes a specific past term, or `null` for full history.
+  const getAbsenceCount = (applicant, term = activeTerm) => {
+    const termEvents = term
+      ? events.filter((e) => e.schoolYear === term.schoolYear && e.semester === term.semester)
+      : events;
+    return termEvents.filter(event => {
+      if (!hasEventEnded(event)) return false;
+      const attended = (applicant.attendance || []).find(a => a.activity === event.name);
+      return !attended || !attended.present;
     }).length;
   };
 
-  const handleSaveActivity = () => {
-    if (selectedActivity) {
-      updateActivity(selectedActivity.id, activityForm);
+  const openAddEventModal = () => {
+    setSelectedEvent(null);
+    setEventForm({
+      name: '',
+      date: '',
+      startTime: '',
+      endTime: '',
+      schoolYear: activeTerm?.schoolYear || '',
+      semester: activeTerm?.semester || '',
+    });
+    setShowEventModal(true);
+  };
+
+  const handleSaveEvent = async () => {
+    try {
+      // Every scheduled event is mandatory — always saved as required.
+      const payload = { ...eventForm, required: true };
+      if (selectedEvent) {
+        await updateEvent(selectedEvent.firestoreId, payload);
+        Swal.fire({
+          title: 'Updated!',
+          text: `${eventForm.name} has been updated.`,
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } else {
+        await addEvent(payload);
+        Swal.fire({
+          title: 'Added!',
+          text: `${eventForm.name} has been added successfully.`,
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      }
+      setShowEventModal(false);
+      setEventForm({ name: '', date: '', startTime: '', endTime: '', schoolYear: '', semester: '' });
+      setSelectedEvent(null);
+    } catch (error) {
       Swal.fire({
-        title: 'Updated!',
-        text: `${activityForm.name} has been updated.`,
-        icon: 'success',
-        timer: 2000,
-        showConfirmButton: false
-      });
-    } else {
-      addActivity(activityForm);
-      Swal.fire({
-        title: 'Added!',
-        text: `${activityForm.name} has been added successfully.`,
-        icon: 'success',
-        timer: 2000,
-        showConfirmButton: false
+        title: 'Save failed',
+        text: error?.message || 'Could not save the event.',
+        icon: 'error',
       });
     }
-    setShowActivityModal(false);
-    setActivityForm({ name: '', date: '', required: true });
-    setSelectedActivity(null);
   };
 
-  const handleEditActivity = (activity) => {
-    setSelectedActivity(activity);
-    setActivityForm({ name: activity.name, date: activity.date, required: activity.required });
-    setShowActivityModal(true);
+  const handleEditEvent = (event) => {
+    setSelectedEvent(event);
+    setEventForm({
+      name: event.name,
+      date: event.date,
+      startTime: event.startTime || '',
+      endTime: event.endTime || '',
+      schoolYear: event.schoolYear || '',
+      semester: event.semester || '',
+    });
+    setShowEventModal(true);
   };
 
-  const handleDeleteActivity = async (id) => {
+  const handleDeleteEvent = async (firestoreId) => {
     const result = await Swal.fire({
-      title: 'Delete Activity?',
-      text: 'All attendance records for this activity will be lost!',
+      title: 'Delete Event?',
+      text: 'All attendance records for this event will be lost!',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#ef4444',
@@ -133,53 +237,64 @@ export default function Attendance() {
     });
 
     if (result.isConfirmed) {
-      deleteActivity(id);
-      Swal.fire({
-        title: 'Deleted!',
-        text: 'Activity has been deleted.',
-        icon: 'success',
-        timer: 2000,
-        showConfirmButton: false
-      });
+      try {
+        await deleteEvent(firestoreId);
+        Swal.fire({
+          title: 'Deleted!',
+          text: 'Event has been deleted.',
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      } catch (error) {
+        Swal.fire({
+          title: 'Delete failed',
+          text: error?.message || 'Could not delete the event.',
+          icon: 'error',
+        });
+      }
     }
   };
 
-  const openAttendanceModal = (activity) => {
-    setSelectedActivity(activity);
+  const openAttendanceModal = (event) => {
+    setSelectedEvent(event);
     setShowAttendanceModal(true);
   };
 
-  const handleMarkAttendance = (applicant, activity, present) => {
+  const handleMarkAttendance = (applicant, event, present) => {
     const existingAttendance = applicant.attendance || [];
-    const existingRecord = existingAttendance.findIndex(a => a.activity === activity.name);
+    const existingRecord = existingAttendance.findIndex(a => a.activity === event.name);
     const now = new Date();
     const timeStamp = format(now, 'yyyy-MM-dd HH:mm:ss');
-    
+
     let updatedAttendance;
-    const attendanceRecord = { 
-      activity: activity.name, 
-      date: activity.date, 
+    const attendanceRecord = {
+      activity: event.name,
+      date: event.date,
       present,
       timeLogged: timeStamp,
       loggedVia: 'Manual'
     };
 
     if (existingRecord >= 0) {
-      updatedAttendance = existingAttendance.map((a, i) => 
+      updatedAttendance = existingAttendance.map((a, i) =>
         i === existingRecord ? attendanceRecord : a
       );
     } else {
       updatedAttendance = [...existingAttendance, attendanceRecord];
     }
 
-    // Calculate absence count after this update
+    // Calculate absence count after this update — only events in the
+    // currently active term count (see getAbsenceCount above).
     let absenceCount = 0;
-    activities.forEach(act => {
-      if (act.required) {
-        const attendanceForActivity = updatedAttendance.find(a => a.activity === act.name);
-        if (!attendanceForActivity || !attendanceForActivity.present) {
-          absenceCount++;
-        }
+    const termEvents = activeTerm
+      ? events.filter((e) => e.schoolYear === activeTerm.schoolYear && e.semester === activeTerm.semester)
+      : [];
+    termEvents.forEach(evt => {
+      if (!hasEventEnded(evt)) return;
+      const attendanceForEvent = updatedAttendance.find(a => a.activity === evt.name);
+      if (!attendanceForEvent || !attendanceForEvent.present) {
+        absenceCount++;
       }
     });
 
@@ -187,7 +302,7 @@ export default function Attendance() {
     let updatedStatus = applicant.status;
     if (absenceCount > 2 && (applicant.status === 'active' || applicant.status === 'approved')) {
       updatedStatus = 'terminated';
-      
+
       // Show termination alert
       setTimeout(() => {
         Swal.fire({
@@ -199,21 +314,23 @@ export default function Attendance() {
       }, 300);
     }
 
-    updateApplicant(applicant.id, { 
+    updateApplicant(applicant.id, {
       attendance: updatedAttendance,
       status: updatedStatus
     });
 
-    // Log the attendance action
+    // Log the attendance action. This function only handles the admin's
+    // manual Present/Absent marking (QR-scanned attendance is written
+    // directly to Firestore by the QR scanner app, not through here).
     const logEntry = {
       id: Date.now(),
       applicantId: applicant.id,
       applicantName: formatPersonName(applicant),
       school: applicant.school,
-      activity: activity.name,
+      activity: event.name,
       status: present ? 'Present' : 'Absent',
       timestamp: timeStamp,
-      method: viaQR ? 'QR Scan' : 'Manual Entry'
+      method: 'Manual Entry'
     };
 
     setAttendanceLogs(prev => [logEntry, ...prev]);
@@ -221,41 +338,55 @@ export default function Attendance() {
     return logEntry;
   };
 
-  const getAttendanceForActivity = (applicant, activityName) => {
+  const getAttendanceForEvent = (applicant, eventName) => {
     if (!applicant.attendance) return null;
-    return applicant.attendance.find(a => a.activity === activityName);
+    return applicant.attendance.find(a => a.activity === eventName);
   };
 
-  const getAttendanceStats = (applicant) => {
+  // Attendance is counted against events for the given term (defaults to the
+  // active term, so a new semester starts every scholar back at a clean
+  // 0/0 instead of carrying forward a ratio built up over past semesters —
+  // full history is still available via the Attendance Details modal's term
+  // picker, or by passing `null` here for "All Terms").
+  //
+  // Within a term, this is further restricted to events that currently exist.
+  // This previously added an "extra events" term for any record whose activity
+  // matched no scheduled event, on the assumption those were QR scans outside
+  // the schedule. They cannot be: the QR scanner reads this same `events`
+  // collection, refuses to scan without a selected event, and cannot create
+  // ad-hoc ones. So a record with no matching event is always left over from a
+  // deleted event — and counting it made deleted events reappear in scholars'
+  // totals (a "0/3" with no events on the page at all).
+  //
+  // deleteEvent now clears those records as it deletes, but ignoring them here
+  // also corrects records orphaned before that fix, without deleting anything.
+  const getAttendanceStats = (applicant, term = activeTerm) => {
     const att = applicant.attendance || [];
-    const attended = att.filter(a => a.present).length;
-    // Total counts admin-defined activities plus any recorded events (e.g. QR
-    // scans) that aren't tied to a defined activity.
-    const activityNames = new Set(activities.map(a => a.name));
-    const extraEvents = att.filter(a => a.activity && !activityNames.has(a.activity)).length;
-    return { attended, total: activities.length + extraEvents };
+    const termEvents = term
+      ? events.filter((e) => e.schoolYear === term.schoolYear && e.semester === term.semester)
+      : events;
+    const eventNames = new Set(termEvents.map(e => e.name));
+    const attended = att.filter(a => a.present && eventNames.has(a.activity)).length;
+    return { attended, total: termEvents.length };
   };
 
-  // Builds the rows shown in the Attendance Details modal: every admin-defined
-  // activity, plus any recorded event (QR scan) that isn't a defined activity.
-  const getScholarAttendanceRows = (scholar) => {
+  // Rows for the Attendance Details modal: one per scheduled event in the
+  // given term (`null` = every term on file, for browsing full history).
+  // Orphaned records are omitted for the same reason they are not counted.
+  const getScholarAttendanceRows = (scholar, term) => {
     const att = scholar.attendance || [];
-    const activityNames = new Set(activities.map(a => a.name));
-    const definedRows = activities.map((act) => ({
-      key: `act-${act.id}`,
-      name: act.name,
-      date: act.date,
-      record: att.find(a => a.activity === act.name) || null,
+    const termEvents = term
+      ? events.filter((e) => e.schoolYear === term.schoolYear && e.semester === term.semester)
+      : events;
+    return termEvents.map((event) => ({
+      key: `evt-${event.firestoreId}`,
+      name: event.name,
+      date: event.date,
+      endTime: event.endTime,
+      schoolYear: event.schoolYear,
+      semester: event.semester,
+      record: att.find(a => a.activity === event.name) || null,
     }));
-    const scannedRows = att
-      .filter(a => a.activity && !activityNames.has(a.activity))
-      .map((a, i) => ({
-        key: `evt-${i}-${a.activity}`,
-        name: a.activity,
-        date: a.date || a.attendedAt || a.createdAt || null,
-        record: a,
-      }));
-    return [...definedRows, ...scannedRows];
   };
 
   const sortedApplicants = [...filteredApplicants].sort((a, b) => {
@@ -284,23 +415,80 @@ export default function Attendance() {
   const totalPages = Math.ceil(sortedApplicants.length / itemsPerPage);
   const paginatedApplicants = sortedApplicants.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+  // Exports the currently filtered/sorted attendance records (not just the
+  // current page) for the active term to an Excel report.
+  const handleExportAttendance = () => {
+    if (sortedApplicants.length === 0) {
+      Swal.fire({
+        icon: 'info',
+        title: 'Nothing to export',
+        text: 'No scholars match the current search/filter.',
+      });
+      return;
+    }
+
+    const rows = sortedApplicants.map((applicant) => {
+      if (isExemptFromAttendance(applicant)) {
+        return {
+          'Scholar ID': applicant.scholarId || '',
+          'Name': formatPersonName(applicant),
+          'Email': applicant.email || '',
+          'School': applicant.school || '',
+          'Program': applicant.program || '',
+          'Present': '—',
+          'Total Events': '—',
+          'Attendance Rate': '—',
+          'Absences': '—',
+          'Status': 'Exempted',
+        };
+      }
+      const stats = getAttendanceStats(applicant);
+      const absences = getAbsenceCount(applicant);
+      return {
+        'Scholar ID': applicant.scholarId || '',
+        'Name': formatPersonName(applicant),
+        'Email': applicant.email || '',
+        'School': applicant.school || '',
+        'Program': applicant.program || '',
+        'Present': stats.attended,
+        'Total Events': stats.total,
+        'Attendance Rate': stats.total > 0 ? `${Math.round((stats.attended / stats.total) * 100)}%` : '—',
+        'Absences': absences,
+        'Status': absences > 2 ? 'Exceeded Limit' : absences === 2 ? 'Warning' : 'Good Standing',
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const termLabel = activeTerm
+      ? `${activeTerm.semester}_${activeTerm.schoolYear}`.replace(/\s+/g, '_')
+      : 'attendance';
+    saveAs(
+      new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+      `attendance_report_${termLabel}.xlsx`
+    );
+  };
+
   const viewScholarDetails = (applicant) => {
     setSelectedScholar(applicant);
+    setDetailsTerm(activeTerm);
     setShowScholarDetailsModal(true);
   };
 
   // Stats
-  const excessiveAbsences = filteredApplicants.filter(a => getAbsenceCount(a) === 2).length;
-  const overTwoAbsences = filteredApplicants.filter(a => getAbsenceCount(a) > 2).length;
+  const excessiveAbsences = attendanceEligibleApplicants.filter(a => getAbsenceCount(a) === 2).length;
+  const overTwoAbsences = attendanceEligibleApplicants.filter(a => getAbsenceCount(a) > 2).length;
   const todayLogs = attendanceLogs.filter(log => 
     log.timestamp.startsWith(format(new Date(), 'yyyy-MM-dd'))
   );
 
   return (
     <div className="page attendance-page">
-      <Header 
-        title="Attendance & Activity Management" 
-        subtitle="Track scholar attendance and manage activities"
+      <Header
+        title="Attendance & Event Management"
+        subtitle="Schedule events and track scholar attendance"
         onMenuClick={onMenuClick}
       />
 
@@ -312,8 +500,8 @@ export default function Attendance() {
               <Calendar size={24} />
             </div>
             <div className="stat-info">
-              <span className="stat-value">{activities.length}</span>
-              <span className="stat-label">Total Activities</span>
+              <span className="stat-value">{events.length}</span>
+              <span className="stat-label">Total Events</span>
             </div>
           </div>
           <div className="stat-card stat-card-green">
@@ -345,32 +533,111 @@ export default function Attendance() {
           </div>
         </div>
 
+        {/* Scheduled Events */}
+        <div className="section-card">
+          <div className="section-header">
+            <h3>Scheduled Events</h3>
+            {editAllowed && (
+              <div className="actions-left">
+                <button className="btn btn-sm btn-primary" onClick={openAddEventModal}>
+                  <Plus size={16} /> Add Event
+                </button>
+              </div>
+            )}
+          </div>
 
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Event Name</th>
+                  <th>Date</th>
+                  <th>School Year</th>
+                  <th>Semester</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: 'center', padding: '40px' }}>
+                      <Calendar size={48} style={{ opacity: 0.3, marginBottom: '10px' }} />
+                      <p>No events scheduled yet</p>
+                    </td>
+                  </tr>
+                ) : (
+                  events.map(event => (
+                    <tr key={event.firestoreId}>
+                      <td><strong>{event.name}</strong></td>
+                      <td>{event.date}</td>
+                      <td>{event.schoolYear || '—'}</td>
+                      <td>{event.semester || '—'}</td>
+                      <td>
+                        {editAllowed ? (
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              className="btn btn-sm btn-secondary"
+                              title="Mark attendance for this event"
+                              onClick={() => openAttendanceModal(event)}
+                            >
+                              <UserCheck size={14} /> Mark Attendance
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              title="Edit event"
+                              onClick={() => handleEditEvent(event)}
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              title="Delete event"
+                              onClick={() => handleDeleteEvent(event.firestoreId)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         {/* Scholars Attendance Records */}
         <div className="section-card">
           <div className="section-header">
             <h3>Scholar Attendance Records</h3>
             <div className="actions-left">
-              <div className="search-box">
-                <Search size={18} />
-                <input
-                  type="text"
-                  placeholder="Search scholars..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              <div className="filters-grid" style={{ gridTemplateColumns: 'minmax(240px, 1.2fr) minmax(160px, 1fr) auto' }}>
+                <div className="search-box">
+                  <Search size={18} />
+                  <input
+                    type="text"
+                    placeholder="Search scholars..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+                <select
+                  className="filter-select"
+                  value={filterSchool}
+                  onChange={(e) => setFilterSchool(e.target.value)}
+                >
+                  <option value="">All Schools</option>
+                  {schoolFilterOptions.map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+                <button className="btn btn-secondary" onClick={handleExportAttendance}>
+                  <Download size={16} /> Export
+                </button>
               </div>
-              <select
-                className="filter-select"
-                value={filterSchool}
-                onChange={(e) => setFilterSchool(e.target.value)}
-              >
-                <option value="">All Schools</option>
-                {schools.filter(s => s.name !== 'St. Augustine Academy').map(school => (
-                  <option key={school.id} value={school.name}>{school.name}</option>
-                ))}
-              </select>
             </div>
           </div>
 
@@ -396,11 +663,12 @@ export default function Attendance() {
                   </tr>
                 ) : (
                   paginatedApplicants.map(applicant => {
+                    const isExempt = isExemptFromAttendance(applicant);
                     const absences = getAbsenceCount(applicant);
                     const stats = getAttendanceStats(applicant);
-                    const isTerminated = absences > 2;
-                    const isWarning = absences === 2;
-                    
+                    const isTerminated = !isExempt && absences > 2;
+                    const isWarning = !isExempt && absences === 2;
+
                     return (
                       <tr key={applicant.id} className={isTerminated ? 'row-danger' : isWarning ? 'row-warning' : ''}>
                         <td>
@@ -420,27 +688,42 @@ export default function Attendance() {
                         </td>
                         <td>{applicant.school}</td>
                         <td>{applicant.program}</td>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {isExempt ? (
+                          <td colSpan={2}>
                             <span style={{
-                              fontSize: '1.25rem',
-                              fontWeight: 700,
-                              color: stats.attended === stats.total ? '#10b981' : stats.attended / stats.total >= 0.75 ? '#3b82f6' : 'var(--warning)'
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              color: 'var(--text-secondary)',
+                              fontStyle: 'italic',
                             }}>
-                              {stats.attended}/{stats.total}
+                              Exempted
                             </span>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                              ({stats.total > 0 ? Math.round((stats.attended / stats.total) * 100) : 0}%)
-                            </span>
-                          </div>
-                        </td>
+                          </td>
+                        ) : (
+                          <>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span style={{
+                                  fontSize: '1.25rem',
+                                  fontWeight: 700,
+                                  color: stats.attended === stats.total ? '#10b981' : stats.attended / stats.total >= 0.75 ? '#3b82f6' : 'var(--warning)'
+                                }}>
+                                  {stats.attended}/{stats.total}
+                                </span>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                  ({stats.total > 0 ? Math.round((stats.attended / stats.total) * 100) : 0}%)
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`absence-count ${isTerminated ? 'danger' : isWarning ? 'warning' : ''}`}>
+                                {absences}
+                              </span>
+                            </td>
+                          </>
+                        )}
                         <td>
-                          <span className={`absence-count ${isTerminated ? 'danger' : isWarning ? 'warning' : ''}`}>
-                            {absences}
-                          </span>
-                        </td>
-                        <td>
-                          <button 
+                          <button
                             className="btn btn-sm btn-primary"
                             onClick={() => viewScholarDetails(applicant)}
                           >
@@ -491,30 +774,30 @@ export default function Attendance() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
             <div className="info-note">
               <AlertTriangle size={16} />
-              <span>Note: St. Augustine Academy scholars are exempt from attendance requirements.</span>
+              <span>Note: St. Augustine Seminary scholars are exempt from attendance requirements — they're shown above marked "Exempted" rather than counted.</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Activity Modal */}
-      {showActivityModal && (
-        <div className="modal-overlay" onClick={() => setShowActivityModal(false)}>
+      {/* Event Modal */}
+      {showEventModal && (
+        <div className="modal-overlay" onClick={() => setShowEventModal(false)}>
           <div className="modal small-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{selectedActivity ? 'Edit Activity' : 'Add Activity'}</h2>
-              <button className="modal-close" onClick={() => setShowActivityModal(false)}>
+              <h2>{selectedEvent ? 'Edit Event' : 'Add Event'}</h2>
+              <button className="modal-close" onClick={() => setShowEventModal(false)}>
                 <X size={20} />
               </button>
             </div>
 
             <div className="modal-body">
               <div className="form-group">
-                <label>Activity Name</label>
+                <label>Event Name</label>
                 <input
                   type="text"
-                  value={activityForm.name}
-                  onChange={(e) => setActivityForm({ ...activityForm, name: e.target.value })}
+                  value={eventForm.name}
+                  onChange={(e) => setEventForm({ ...eventForm, name: e.target.value })}
                   placeholder="e.g., Orientation Seminar"
                 />
               </div>
@@ -522,30 +805,57 @@ export default function Attendance() {
                 <label>Date</label>
                 <input
                   type="date"
-                  value={activityForm.date}
-                  onChange={(e) => setActivityForm({ ...activityForm, date: e.target.value })}
+                  value={eventForm.date}
+                  onChange={(e) => setEventForm({ ...eventForm, date: e.target.value })}
                 />
               </div>
-              <div className="form-group">
-                <label className="checkbox-label">
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Start Time</label>
                   <input
-                    type="checkbox"
-                    checked={activityForm.required}
-                    onChange={(e) => setActivityForm({ ...activityForm, required: e.target.checked })}
+                    type="time"
+                    value={eventForm.startTime}
+                    onChange={(e) => setEventForm({ ...eventForm, startTime: e.target.value })}
                   />
-                  <span className="checkbox-custom"><CheckCircle size={14} /></span>
-                  Required Activity
-                </label>
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>End Time</label>
+                  <input
+                    type="time"
+                    value={eventForm.endTime}
+                    onChange={(e) => setEventForm({ ...eventForm, endTime: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '-0.5rem 0 0' }}>
+                A scholar who hasn't scanned in by the end time is automatically counted absent.
+              </p>
+              <div className="form-group">
+                <label>Term</label>
+                <div
+                  style={{
+                    padding: '0.6rem 0.75rem',
+                    borderRadius: '0.5rem',
+                    background: 'var(--bg-secondary)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                    fontWeight: 600,
+                  }}
+                >
+                  {eventForm.schoolYear && eventForm.semester
+                    ? `${eventForm.semester}, A.Y. ${eventForm.schoolYear}`
+                    : 'No active term set'}
+                </div>
               </div>
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowActivityModal(false)}>
+              <button className="btn btn-secondary" onClick={() => setShowEventModal(false)}>
                 Cancel
               </button>
-              <button className="btn btn-primary" onClick={handleSaveActivity}>
+              <button className="btn btn-primary" onClick={handleSaveEvent}>
                 <Save size={16} />
-                {selectedActivity ? 'Update' : 'Add'} Activity
+                {selectedEvent ? 'Update' : 'Add'} Event
               </button>
             </div>
           </div>
@@ -553,11 +863,11 @@ export default function Attendance() {
       )}
 
       {/* Attendance Modal */}
-      {showAttendanceModal && selectedActivity && (
+      {showAttendanceModal && selectedEvent && (
         <div className="modal-overlay" onClick={() => setShowAttendanceModal(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Attendance - {selectedActivity.name}</h2>
+              <h2>Attendance - {selectedEvent.name}</h2>
               <button className="modal-close" onClick={() => setShowAttendanceModal(false)}>
                 <X size={20} />
               </button>
@@ -565,9 +875,9 @@ export default function Attendance() {
 
             <div className="modal-body">
               <div className="attendance-list">
-                {filteredApplicants.map(applicant => {
-                  const attendance = getAttendanceForActivity(applicant, selectedActivity.name);
-                  
+                {attendanceEligibleApplicants.map(applicant => {
+                  const attendance = getAttendanceForEvent(applicant, selectedEvent.name);
+
                   return (
                     <div key={applicant.id} className="attendance-row">
                       <div className="applicant-info">
@@ -584,13 +894,13 @@ export default function Attendance() {
                       <div className="attendance-buttons">
                         <button
                           className={`attendance-btn present ${attendance?.present === true ? 'active' : ''}`}
-                          onClick={() => handleMarkAttendance(applicant, selectedActivity, true)}
+                          onClick={() => handleMarkAttendance(applicant, selectedEvent, true)}
                         >
                           <CheckCircle size={16} /> Present
                         </button>
                         <button
                           className={`attendance-btn absent ${attendance?.present === false ? 'active' : ''}`}
-                          onClick={() => handleMarkAttendance(applicant, selectedActivity, false)}
+                          onClick={() => handleMarkAttendance(applicant, selectedEvent, false)}
                         >
                           <XCircle size={16} /> Absent
                         </button>
@@ -658,7 +968,7 @@ export default function Attendance() {
                       <th>Timestamp</th>
                       <th>Student</th>
                       <th>School</th>
-                      <th>Activity</th>
+                      <th>Event</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -751,11 +1061,11 @@ export default function Attendance() {
 
             <div className="modal-body">
               {/* Scholar Info */}
-              <div style={{ 
-                background: 'rgba(45, 149, 150, 0.1)', 
-                padding: '1rem', 
+              <div style={{
+                background: 'rgba(45, 149, 150, 0.1)',
+                padding: '1rem',
                 borderRadius: '0.5rem',
-                marginBottom: '1.5rem',
+                marginBottom: '1rem',
                 border: '1px solid rgba(45, 149, 150, 0.2)'
               }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
@@ -774,10 +1084,10 @@ export default function Attendance() {
                   <div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Attendance Rate</div>
                     <div style={{ fontWeight: 700, fontSize: '1.25rem', color: '#10b981' }}>
-                      {getAttendanceStats(selectedScholar).attended}/{getAttendanceStats(selectedScholar).total}
+                      {getAttendanceStats(selectedScholar, detailsTerm).attended}/{getAttendanceStats(selectedScholar, detailsTerm).total}
                       <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
-                        ({getAttendanceStats(selectedScholar).total > 0 
-                          ? Math.round((getAttendanceStats(selectedScholar).attended / getAttendanceStats(selectedScholar).total) * 100) 
+                        ({getAttendanceStats(selectedScholar, detailsTerm).total > 0
+                          ? Math.round((getAttendanceStats(selectedScholar, detailsTerm).attended / getAttendanceStats(selectedScholar, detailsTerm).total) * 100)
                           : 0}%)
                       </span>
                     </div>
@@ -785,18 +1095,46 @@ export default function Attendance() {
                 </div>
               </div>
 
+              {/* Term picker — records reset to the active term by default;
+                  pick any past term (or "All Terms") to see older records. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  Viewing:
+                </label>
+                <select
+                  className="filter-select"
+                  style={{ maxWidth: 320 }}
+                  value={detailsTerm ? `${detailsTerm.schoolYear}::${detailsTerm.semester}` : 'all'}
+                  onChange={(e) => {
+                    if (e.target.value === 'all') {
+                      setDetailsTerm(null);
+                      return;
+                    }
+                    const [schoolYear, semester] = e.target.value.split('::');
+                    setDetailsTerm({ schoolYear, semester });
+                  }}
+                >
+                  {termOptions.map((t) => (
+                    <option key={`${t.schoolYear}::${t.semester}`} value={`${t.schoolYear}::${t.semester}`}>
+                      {t.semester}, A.Y. {t.schoolYear}{t.isActive ? ' (Active)' : ''}
+                    </option>
+                  ))}
+                  <option value="all">All Terms (Full History)</option>
+                </select>
+              </div>
+
               {/* Attendance Records */}
               <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--text-primary)' }}>
-                Activity Attendance Records
+                Event Attendance Records
               </h3>
 
               {(() => {
-                const rows = getScholarAttendanceRows(selectedScholar);
+                const rows = getScholarAttendanceRows(selectedScholar, detailsTerm);
                 if (rows.length === 0) {
                   return (
                     <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
                       <Calendar size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                      <p>No activities recorded yet</p>
+                      <p>No events recorded for this term</p>
                     </div>
                   );
                 }
@@ -810,8 +1148,9 @@ export default function Attendance() {
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>Activity</th>
+                          <th>Event</th>
                           <th>Date</th>
+                          {!detailsTerm && <th>Term</th>}
                           <th>Status</th>
                           <th>Time Logged</th>
                           <th>Method</th>
@@ -829,6 +1168,11 @@ export default function Attendance() {
                                 </div>
                               </td>
                               <td>{formatRowDate(row.date)}</td>
+                              {!detailsTerm && (
+                                <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                  {row.semester && row.schoolYear ? `${row.semester}, ${row.schoolYear}` : '—'}
+                                </td>
+                              )}
                               <td>
                                 {attendance ? (
                                   attendance.present ? (
@@ -882,34 +1226,40 @@ export default function Attendance() {
               })()}
 
               {/* Summary */}
-              <div style={{ 
-                marginTop: '1.5rem',
-                padding: '1rem',
-                background: 'var(--bg-secondary)',
-                borderRadius: '0.5rem',
-                border: '1px solid var(--border-color)'
-              }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Present</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#10b981' }}>
-                      {selectedScholar.attendance?.filter(a => a.present).length || 0}
+              {(() => {
+                const stats = getAttendanceStats(selectedScholar, detailsTerm);
+                const absent = getAbsenceCount(selectedScholar, detailsTerm);
+                return (
+                  <div style={{
+                    marginTop: '1.5rem',
+                    padding: '1rem',
+                    background: 'var(--bg-secondary)',
+                    borderRadius: '0.5rem',
+                    border: '1px solid var(--border-color)'
+                  }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', textAlign: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Present</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#10b981' }}>
+                          {stats.attended}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Absent</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--danger)' }}>
+                          {absent}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Total Events</div>
+                        <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>
+                          {stats.total}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Absent</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--danger)' }}>
-                      {getAbsenceCount(selectedScholar)}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Total Activities</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>
-                      {activities.length}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
             <div className="modal-footer">

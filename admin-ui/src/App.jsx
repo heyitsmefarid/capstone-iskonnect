@@ -18,6 +18,7 @@ import SystemSettings from './pages/SystemSettings';
 import StaffManagement from './pages/StaffManagement';
 import SchoolYearManagement from './pages/SchoolYearManagement';
 import AuditLogs from './pages/AuditLogs';
+import BackupRestore from './pages/BackupRestore';
 import ApplicantHistory from './pages/ApplicantHistory';
 import ScholarHistory from './pages/ScholarHistory';
 import { isAuthenticated as readAuth, getRole, clearSession } from './utils/auth';
@@ -90,18 +91,81 @@ function App() {
           >
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="applications" element={<Applications />} />
+            <Route
+              path="applications"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <Applications />
+                </RoleRoute>
+              )}
+            />
             <Route path="scholars" element={<Scholars />} />
             <Route path="attendance" element={<Attendance />} />
             <Route path="academic-records" element={<AcademicRecords />} />
-            <Route path="evaluation" element={<ScholarshipEvaluation />} />
-            <Route path="timeline" element={<ScholarshipTimeline />} />
-            <Route path="announcements" element={<Announcements />} />
-            <Route path="messages" element={<Messages />} />
-            <Route path="reports" element={<Reports />} />
-            <Route path="applicant-history" element={<ApplicantHistory />} />
-            <Route path="scholar-history" element={<ScholarHistory />} />
-            <Route path="user-management" element={<UserManagement />} />
+            <Route
+              path="evaluation"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <ScholarshipEvaluation />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="timeline"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <ScholarshipTimeline />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="announcements"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <Announcements />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="messages"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <Messages />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="reports"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <Reports />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="applicant-history"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <ApplicantHistory />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="scholar-history"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <ScholarHistory />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="user-management"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <UserManagement />
+                </RoleRoute>
+              )}
+            />
             <Route
               path="staff-management"
               element={(
@@ -110,7 +174,14 @@ function App() {
                 </RoleRoute>
               )}
             />
-            <Route path="school-years" element={<SchoolYearManagement />} />
+            <Route
+              path="school-years"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <SchoolYearManagement />
+                </RoleRoute>
+              )}
+            />
             <Route
               path="audit-logs"
               element={(
@@ -119,7 +190,22 @@ function App() {
                 </RoleRoute>
               )}
             />
-            <Route path="system-settings" element={<SystemSettings />} />
+            <Route
+              path="backup-restore"
+              element={(
+                <RoleRoute allow={['admin']} role={role}>
+                  <BackupRestore />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="system-settings"
+              element={(
+                <RoleRoute allow={['admin', 'staff']} role={role}>
+                  <SystemSettings />
+                </RoleRoute>
+              )}
+            />
           </Route>
 
           <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />

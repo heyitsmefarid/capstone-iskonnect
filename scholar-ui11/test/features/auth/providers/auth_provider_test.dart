@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:iskonnectttt/core/models/student_model.dart';
@@ -31,7 +32,12 @@ void main() {
 
   test('markCelebrationSeen flips celebrationSeen to true for the logged-in student', () async {
     SharedPreferences.setMockInitialValues({});
-    final notifier = AuthNotifier();
+    // Built through the real provider (not `AuthNotifier()` directly) since
+    // the constructor now needs a genuine `Ref` to invalidate the other
+    // per-scholar providers on login/logout — see resetPerStudentProviders.
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(authStateProvider.notifier);
     final student = _buildScholar();
 
     await notifier.loginWithStudent(student);
@@ -44,7 +50,9 @@ void main() {
 
   test('markCelebrationSeen is a no-op when no student is logged in', () async {
     SharedPreferences.setMockInitialValues({});
-    final notifier = AuthNotifier();
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(authStateProvider.notifier);
 
     await notifier.markCelebrationSeen();
 

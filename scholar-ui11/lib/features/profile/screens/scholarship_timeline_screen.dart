@@ -360,8 +360,10 @@ class _ScholarshipTimelineScreenState
     BuildContext context,
     List<ScholarshipDisbursement> disbursements,
   ) {
+    // Show ALL enrolled semesters — disbursed (grant received) and on_hold
+    // (no grant that semester). This keeps the count in sync with the admin UI.
     final granted = disbursements
-        .where((d) => d.status == 'disbursed')
+        .where((d) => d.status == 'disbursed' || d.status == 'on_hold')
         .toList()
       ..sort((a, b) => b.disbursedDate.compareTo(a.disbursedDate));
 
@@ -430,12 +432,18 @@ class _ScholarshipTimelineScreenState
                         const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final item = granted[index];
+                      final isOnHold = item.status == 'on_hold';
+                      final accentColor = isOnHold ? const Color(0xFFF59E0B) : AppColors.success;
                       return Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: AppColors.cardBackground,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(
+                            color: isOnHold
+                                ? const Color(0xFFF59E0B).withValues(alpha: 0.4)
+                                : AppColors.border,
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -443,13 +451,13 @@ class _ScholarshipTimelineScreenState
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: AppColors.success.withValues(alpha: 0.1),
+                                color: accentColor.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(
-                                Icons.payments_rounded,
+                              child: Icon(
+                                isOnHold ? Icons.pause_circle_outline_rounded : Icons.payments_rounded,
                                 size: 18,
-                                color: AppColors.success,
+                                color: accentColor,
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -467,21 +475,23 @@ class _ScholarshipTimelineScreenState
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Disbursed ${Formatters.formatDateShort(item.disbursedDate)}',
-                                    style: const TextStyle(
+                                    isOnHold
+                                        ? 'On Hold — no grant this semester'
+                                        : 'Disbursed ${Formatters.formatDateShort(item.disbursedDate)}',
+                                    style: TextStyle(
                                       fontSize: 11,
-                                      color: AppColors.textSecondary,
+                                      color: isOnHold ? const Color(0xFFF59E0B) : AppColors.textSecondary,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                             Text(
-                              '₱${Formatters.formatCurrency(item.amount)}',
-                              style: const TextStyle(
+                              isOnHold ? '₱0' : '₱${Formatters.formatCurrency(item.amount)}',
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
-                                color: AppColors.success,
+                                color: accentColor,
                               ),
                             ),
                           ],

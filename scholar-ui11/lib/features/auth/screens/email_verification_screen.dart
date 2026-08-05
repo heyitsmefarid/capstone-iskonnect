@@ -20,6 +20,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
   bool _loading = false;
   bool _resending = false;
   String? _error;
+  String? _devCode;
   int _resendCooldown = 60;
   Timer? _timer;
 
@@ -56,6 +57,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     if (!mounted) return;
     setState(() {
       _error = result.success ? null : result.message;
+      if (result.devCode != null) _devCode = result.devCode;
     });
   }
 
@@ -184,6 +186,48 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(6, (i) => _buildOtpBox(i)),
             ),
+
+            if (_devCode != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade300),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.developer_mode, color: Colors.orange.shade700, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Dev Mode — Email not configured',
+                          style: TextStyle(
+                            color: Colors.orange.shade700,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Your code: $_devCode',
+                      style: TextStyle(
+                        color: Colors.orange.shade900,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             if (_error != null) ...[
               const SizedBox(height: 16),

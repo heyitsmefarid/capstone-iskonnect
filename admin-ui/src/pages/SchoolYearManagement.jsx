@@ -7,12 +7,6 @@ import {
 import Header from '../components/layout/Header';
 import { useApp } from '../context/AppContext';
 
-// Statuses that mean the applicant already cleared the cycle (became a
-// scholar) or is already archived elsewhere — these are left alone when a
-// term ends. Everyone else still sitting in that term is "did not make it in
-// time" and moves to Applicant History.
-const CLEARED_STATUSES = ['approved', 'active', 'graduated', 'terminated', 'rejected'];
-
 const SEMESTER_OPTIONS = [
   { name: '1st Semester', order: 1 },
   { name: '2nd Semester', order: 2 },
@@ -21,7 +15,8 @@ const SEMESTER_OPTIONS = [
 export default function SchoolYearManagement() {
   const { onMenuClick } = useOutletContext() || {};
   const {
-    applicants, archiveApplicant, enrollActiveScholarsInSemester,
+    applicants, enrollActiveScholarsInSemester,
+    endOfSemesterScholarsCleanup,
     schoolYears, addSchoolYear, deleteSchoolYear, setActiveSchoolYear,
     addSemester, deleteSemester, setActiveSemester,
   } = useApp();
@@ -48,6 +43,12 @@ export default function SchoolYearManagement() {
     .sort((a, b) => (a.startYear - b.startYear) || (a.order - b.order));
 
   const activeTerm = terms.find((t) => t.isActive);
+  // terms is sorted chronologically, so anything before the active term's
+  // index is a past term. Once a scholar's "Semesters Used" has advanced for
+  // a term and its graduated/terminated scholars have been archived, jumping
+  // back would re-run that logic in reverse — advancing counters and
+  // re-archiving scholars for a term that's already been closed out.
+  const activeIndex = terms.findIndex((t) => t.isActive);
 
   /* ── Add Term ── */
   const openAdd = () => {
@@ -92,17 +93,23 @@ export default function SchoolYearManagement() {
         await addSchoolYear({ startYear, endYear, semesters: [sem] });
       }
 
-      // Adding a term advances the program, so enroll active scholars into it.
-      // Any scholar who reaches 8 semesters is auto-graduated to Scholar History.
-      const { enrolled } = enrollActiveScholarsInSemester(label, sem.name);
+      // Note: Semesters Used only advances once this term is actually the
+      // active one — adding it here doesn't activate it (see "Set Active"
+      // below), except for the very first term ever added, which becomes
+      // active automatically; a reactive check in AppContext covers that.
+
+      // Adding a new term also closes out the one that just ended, so archive
+      // any terminated/graduated scholars to Scholar History now — the same
+      // cleanup that runs when an admin explicitly ends the semester.
+      const { archived } = endOfSemesterScholarsCleanup();
 
       setModalOpen(false);
+      const parts = [`${label} · ${sem.name} added.`];
+      if (archived > 0) parts.push(`${archived} scholar${archived !== 1 ? 's' : ''} moved to Scholar History.`);
       Swal.fire({
         title: 'Term added',
-        text: enrolled > 0
-          ? `${label} · ${sem.name} added. ${enrolled} active scholar${enrolled !== 1 ? 's' : ''} advanced.`
-          : `${label} · ${sem.name} added.`,
-        icon: 'success', timer: 2000, showConfirmButton: false,
+        text: parts.join(' '),
+        icon: 'success', timer: 2400, showConfirmButton: false,
       });
     } catch (err) {
       Swal.fire({ title: 'Save failed', text: err?.message || 'Could not save to the database.', icon: 'error' });
@@ -113,37 +120,54 @@ export default function SchoolYearManagement() {
   const setActive = async (term) => {
     if (term.isActive) return;
 
-    // Unapproved applicants still in the outgoing active term move to History.
-    const prevSy = schoolYears.find((s) => s.isActive);
-    const prevSem = prevSy?.semesters?.find((s) => s.isActive);
-    const carryOver = (prevSy && prevSem)
-      ? applicants.filter((a) =>
-          a.schoolYear === prevSy.label &&
-          a.semester === prevSem.name &&
-          !CLEARED_STATUSES.includes(a.status))
-      : [];
+    const termIndex = terms.findIndex((t) => t.syId === term.syId && t.semId === term.semId);
+    if (activeIndex !== -1 && termIndex < activeIndex) {
+      Swal.fire({
+        title: "Can't reactivate a past term",
+        text: `${term.label} · ${term.semester} already ended. Add a new term instead of going back to an old one.`,
+        icon: 'warning',
+      });
+      return;
+    }
+
+    // Count scholars who will be moved to Scholar History at end of semester.
+    const scholarsToArchive = applicants.filter(
+      (a) => a.status === 'terminated' || a.status === 'graduated'
+    );
+
+    const bodyText = scholarsToArchive.length > 0
+      ? `${scholarsToArchive.length} graduated/terminated scholar${scholarsToArchive.length !== 1 ? 's' : ''} will move to Scholar History.`
+      : 'This becomes the current active term.';
 
     const res = await Swal.fire({
-      title: `Make ${term.label} · ${term.semester} the active term?`,
-      text: carryOver.length > 0
-        ? `${carryOver.length} unapproved applicant${carryOver.length !== 1 ? 's' : ''} from the current term will move to Applicant History.`
-        : 'This becomes the current active term.',
+      title: `End semester & make ${term.label} · ${term.semester} active?`,
+      text: bodyText,
       icon: 'question', showCancelButton: true,
-      confirmButtonText: 'Yes, set active',
+      confirmButtonText: 'Yes, end semester',
     });
     if (!res.isConfirmed) return;
 
+    // Archive graduated/terminated; reactivate cleared on-hold scholars.
+    const { archived, reactivated } = endOfSemesterScholarsCleanup();
+
     await setActiveSchoolYear(term.syId);
     await setActiveSemester(term.syId, term.semId);
-    carryOver.forEach((a) => archiveApplicant(a.id, 'not_approved'));
 
-    if (carryOver.length > 0) {
-      Swal.fire({
-        title: 'Active term switched',
-        text: `${carryOver.length} applicant${carryOver.length !== 1 ? 's' : ''} moved to Applicant History.`,
-        icon: 'success', timer: 2200, showConfirmButton: false,
-      });
-    }
+    // Advance Semesters Used for every current scholar now that this term is
+    // actually the active one (idempotent — a no-op for anyone already
+    // counted for it, e.g. if it was counted when first added).
+    const { enrolled } = enrollActiveScholarsInSemester(term.label, term.semester);
+
+    const parts = [];
+    if (enrolled > 0) parts.push(`${enrolled} scholar${enrolled !== 1 ? 's' : ''} advanced to this term.`);
+    if (archived > 0) parts.push(`${archived} scholar${archived !== 1 ? 's' : ''} moved to Scholar History.`);
+    if (reactivated > 0) parts.push(`${reactivated} on-hold scholar${reactivated !== 1 ? 's' : ''} reactivated.`);
+
+    Swal.fire({
+      title: 'Semester ended — new term is now active',
+      text: parts.length > 0 ? parts.join(' ') : 'Active term updated.',
+      icon: 'success', timer: 2800, showConfirmButton: false,
+    });
   };
 
   /* ── Delete Term ── */
@@ -208,7 +232,9 @@ export default function SchoolYearManagement() {
                 </tr>
               </thead>
               <tbody>
-                {terms.map((term) => (
+                {terms.map((term, idx) => {
+                  const isPast = activeIndex !== -1 && idx < activeIndex;
+                  return (
                   <tr key={`${term.syId}-${term.semId}`} className={term.isActive ? 'active-row' : ''}>
                     <td>
                       <div className="term-year">
@@ -223,14 +249,26 @@ export default function SchoolYearManagement() {
                     <td>
                       {term.isActive
                         ? <span className="badge-active">Active</span>
-                        : <span className="badge-muted">Inactive</span>}
+                        : isPast
+                          ? <span className="badge-muted">Ended</span>
+                          : <span className="badge-muted">Inactive</span>}
                     </td>
                     <td>
                       <div className="term-actions">
                         {!term.isActive && (
-                          <button className="btn btn-sm btn-success" onClick={() => setActive(term)}>
-                            <CheckCircle size={13} /> Set Active
-                          </button>
+                          isPast ? (
+                            <button
+                              className="btn btn-sm btn-disabled"
+                              disabled
+                              title="This term already ended and can't be reactivated."
+                            >
+                              <CheckCircle size={13} /> Ended
+                            </button>
+                          ) : (
+                            <button className="btn btn-sm btn-success" onClick={() => setActive(term)}>
+                              <CheckCircle size={13} /> Set Active
+                            </button>
+                          )
                         )}
                         <button className="btn btn-sm btn-danger" onClick={() => removeTerm(term)}>
                           <Trash2 size={13} />
@@ -238,7 +276,8 @@ export default function SchoolYearManagement() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -332,6 +371,7 @@ export default function SchoolYearManagement() {
         .year-end { opacity: 0.55; cursor: not-allowed; }
         .btn-success { background: #10b981; color: #fff; border: none; }
         .btn-success:hover { opacity: 0.85; }
+        .btn-disabled { background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color); cursor: not-allowed; opacity: 0.7; }
         .btn-danger { background: var(--danger); color: #fff; border: none; }
         .btn-danger:hover { opacity: 0.85; }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }

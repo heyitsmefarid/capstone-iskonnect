@@ -205,49 +205,21 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             ),
                             child: Stack(
                               children: [
-                                // Main logo content
+                                // The real ISKONNECT logo, replacing the
+                                // generic school icon + "CED" lettering that
+                                // stood in for it. Clipped to the container's
+                                // radius so the artwork's light background
+                                // cannot spill past the rounded corners.
                                 Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      ShaderMask(
-                                        shaderCallback: (bounds) =>
-                                            LinearGradient(
-                                              colors: [
-                                                AppColors.primary,
-                                                AppColors.primaryDark,
-                                              ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ).createShader(bounds),
-                                        child: const Icon(
-                                          Icons.school_rounded,
-                                          size: 65,
-                                          color: Colors.white,
-                                        ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(40),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(10),
+                                      child: Image.asset(
+                                        'assets/images/app_logo.png',
+                                        fit: BoxFit.contain,
                                       ),
-                                      const SizedBox(height: 6),
-                                      ShaderMask(
-                                        shaderCallback: (bounds) =>
-                                            LinearGradient(
-                                              colors: [
-                                                AppColors.primary,
-                                                AppColors.primaryDark,
-                                              ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ).createShader(bounds),
-                                        child: const Text(
-                                          'CED',
-                                          style: TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.white,
-                                            letterSpacing: 3,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
                                 ),
                                 // Shimmer effect overlay

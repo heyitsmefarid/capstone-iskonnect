@@ -1,19 +1,37 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:iskonnectttt/core/models/requirement_model.dart';
+import 'package:iskonnectttt/core/services/scholar_firestore_service.dart';
+import 'package:iskonnectttt/core/services/storage_service.dart';
 import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/features/requirements/providers/requirements_provider.dart';
 import 'package:iskonnectttt/shared/widgets/dialog_helper.dart';
+import 'package:iskonnectttt/shared/widgets/inline_pdf_preview.dart';
 
 class RequirementsScreen extends ConsumerWidget {
   const RequirementsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final requirements = ref.watch(requirementsProvider);
-    final summary = ref.watch(requirementsSummaryProvider);
+    final requirementsAsync = ref.watch(firestoreRequirementsListProvider);
+    final isLoading = requirementsAsync.isLoading;
+    final requirements = requirementsAsync.asData?.value ?? const [];
+    // Attached but not yet sent — what the Submit button will promote.
+    final stagedRequirements =
+        requirements.where((r) => r.status == 'Uploaded').toList();
+    final summary = RequirementsSummary.fromRequirements(requirements);
+    // "Complete" reflects documents that have been turned in (submitted or
+    // already verified), not just admin-verified ones — otherwise the bar
+    // stays at 0% until the admin reviews everything.
+    final completedCount = summary.submitted + summary.verified;
+    final progress =
+        summary.total > 0 ? completedCount / summary.total : 0.0;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -89,7 +107,7 @@ class RequirementsScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${(summary.progress * 100).toInt()}%',
+                                '${(progress * 100).toInt()}%',
                                 style: const TextStyle(
                                   fontSize: 32,
                                   fontWeight: FontWeight.w800,
@@ -115,7 +133,7 @@ class RequirementsScreen extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              '${summary.verified}/${summary.total}',
+                              '$completedCount/${summary.total}',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
@@ -135,7 +153,7 @@ class RequirementsScreen extends ConsumerWidget {
                         ),
                         child: FractionallySizedBox(
                           alignment: Alignment.centerLeft,
-                          widthFactor: summary.progress,
+                          widthFactor: progress,
                           child: Container(
                             decoration: BoxDecoration(
                               color: Colors.white,
@@ -158,7 +176,7 @@ class RequirementsScreen extends ConsumerWidget {
                           Expanded(
                             child: _CompactStatusChip(
                               label: 'Pending',
-                              count: summary.pending,
+                              count: summary.submitted,
                               color: const Color(0xFFFBBF24),
                             ),
                           ),
@@ -166,7 +184,7 @@ class RequirementsScreen extends ConsumerWidget {
                           Expanded(
                             child: _CompactStatusChip(
                               label: 'Missing',
-                              count: summary.notSubmitted,
+                              count: summary.pending,
                               color: const Color(0xFFF87171),
                             ),
                           ),
@@ -233,6 +251,15 @@ class RequirementsScreen extends ConsumerWidget {
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 10)),
 
+            // Loading indicator while Firestore data is being fetched
+            if (isLoading && requirements.isEmpty)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  child: LinearProgressIndicator(),
+                ),
+              ),
+
             // Requirements List
             SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
@@ -243,12 +270,13 @@ class RequirementsScreen extends ConsumerWidget {
                       status: requirement.status,
                       fileName: requirement.fileName,
                       fileSize: requirement.fileSize,
+                      fileUrl: requirement.fileUrl,
                       uploadDate: requirement.uploadDate,
                       remarks: requirement.remarks,
                       onUpload: () =>
-                      _handleUpload(context, ref, requirement.id),
+                          _handleUpload(context, ref, requirement.id),
                       onReupload: () =>
-                      _handleUpload(context, ref, requirement.id),
+                          _handleUpload(context, ref, requirement.id),
                     )
                     .animate()
                     .fadeIn(delay: Duration(milliseconds: 400 + (index * 50)))
@@ -258,6 +286,40 @@ class RequirementsScreen extends ConsumerWidget {
                     );
               }, childCount: requirements.length),
             ),
+
+            // Submit action — the only thing that sends documents to the
+            // reviewers. Shown only while something is staged, so it cannot be
+            // pressed with nothing to send.
+            if (stagedRequirements.isNotEmpty)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        '${stagedRequirements.length} document'
+                        '${stagedRequirements.length == 1 ? '' : 's'} ready to submit',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton.icon(
+                        onPressed: () =>
+                            _handleSubmitAll(context, ref, stagedRequirements),
+                        icon: const Icon(Icons.send_rounded, size: 18),
+                        label: const Text('Submit Requirements'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate().fadeIn(delay: 450.ms),
+              ),
 
             // Bottom Padding
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -270,53 +332,228 @@ class RequirementsScreen extends ConsumerWidget {
   Future<void> _handleUpload(
     BuildContext context,
     WidgetRef ref,
-    String requirementName,
+    String requirementId,
   ) async {
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var progressShown = false;
+
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        withData: true, // needed so we have the bytes to upload on web
       );
 
-      if (result != null && result.files.isNotEmpty) {
-        final file = result.files.first;
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.first;
 
-        // Check file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          if (context.mounted) {
-            DialogHelper.showErrorDialog(
-              context: context,
-              title: 'File Too Large',
-              message: 'Please select a file smaller than 5MB.',
-            );
-          }
-          return;
-        }
-
-        // Simulate upload
-        ref
-            .read(requirementsProvider.notifier)
-            .uploadDocument(
-              requirementId: requirementName,
-              fileName: file.name,
-              fileSize: file.size,
-              fileType: file.extension ?? 'unknown',
-            );
-
+      if (file.size > 5 * 1024 * 1024) {
         if (context.mounted) {
-          DialogHelper.showSuccessDialog(
+          DialogHelper.showErrorDialog(
             context: context,
-            title: 'Upload Successful',
-            message: '${file.name} has been submitted for verification.',
+            title: 'File Too Large',
+            message: 'Please select a file smaller than 5MB.',
           );
         }
+        return;
+      }
+
+      // Let the user preview the chosen image (or confirm the PDF) before it is
+      // uploaded, so they can catch a wrong pick before it's submitted.
+      if (context.mounted) {
+        final confirmed = await DialogHelper.showFilePreviewConfirm(
+          context: context,
+          fileName: file.name,
+          fileSize: file.size,
+          bytes: file.bytes,
+        );
+        if (!confirmed) return;
+      }
+
+      final studentId = await ScholarFirestoreService.currentStudentId();
+      if (studentId == null) {
+        if (context.mounted) {
+          DialogHelper.showErrorDialog(
+            context: context,
+            title: 'Not Signed In',
+            message: 'Please sign in again before uploading.',
+          );
+        }
+        return;
+      }
+
+      // Blocking spinner while the file uploads — Cloudinary uploads can take a
+      // few seconds and we don't want the user tapping Upload again.
+      if (context.mounted) {
+        progressShown = true;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      // Upload the actual file so it can be viewed later by the scholar and the
+      // admin. Without this only the file name would be stored (nothing to open).
+      String? fileUrl;
+      final bytes = file.bytes;
+      if (bytes != null) {
+        fileUrl = await StorageService.uploadRequirementFile(
+          studentId: studentId,
+          requirementId: requirementId,
+          fileName: file.name,
+          bytes: bytes,
+        );
+      }
+
+      // Staged only — NOT submitted. Uploading used to write
+      // status:'submitted'/submitted:true here, so picking a file instantly
+      // sent it to the reviewers with no way back. The applicant now presses
+      // "Submit Requirements" to promote staged files (see _handleSubmitAll).
+      await ScholarFirestoreService.updateStudentRequirement(
+        studentId,
+        requirementId,
+        {
+          'status': 'uploaded',
+          'submitted': false,
+          'fileName': file.name,
+          'fileSize': file.size,
+          'fileType': file.extension ?? 'unknown',
+          'fileUrl': fileUrl,
+          'uploadedAt': DateTime.now().toIso8601String(),
+          'submittedAt': null,
+        },
+      );
+      // Force the Firestore provider to re-read so the screen reflects the
+      // newly submitted document without requiring a manual refresh.
+      ref.invalidate(firestoreRequirementsListProvider);
+
+      // Dismiss the spinner before showing the result dialog.
+      if (progressShown) {
+        navigator.pop();
+        progressShown = false;
+      }
+
+      if (!context.mounted) return;
+      if (fileUrl == null && bytes != null) {
+        DialogHelper.showErrorDialog(
+          context: context,
+          title: 'Upload Issue',
+          message:
+              'Your file was attached, but it could not be uploaded for viewing. Please try uploading it again.',
+        );
+      } else {
+        DialogHelper.showSuccessDialog(
+          context: context,
+          title: 'File Attached',
+          message:
+              '${file.name} is ready. Press "Submit Requirements" to send your documents for verification.',
+        );
       }
     } catch (e) {
+      if (progressShown) navigator.pop();
       if (context.mounted) {
         DialogHelper.showErrorDialog(
           context: context,
           title: 'Upload Failed',
           message: 'An error occurred while uploading. Please try again.',
+        );
+      }
+    }
+  }
+
+  /// Asks for confirmation, then promotes staged documents. `showConfirmDialog`
+  /// is callback-based rather than awaitable, so the work lives in
+  /// [_submitStaged] and runs from its `onConfirm`.
+  void _handleSubmitAll(
+    BuildContext context,
+    WidgetRef ref,
+    List<RequirementModel> staged,
+  ) {
+    DialogHelper.showConfirmDialog(
+      context: context,
+      title: 'Submit Requirements',
+      message:
+          'Submit ${staged.length} document${staged.length == 1 ? '' : 's'} for verification? '
+          'You will not be able to change them afterwards unless a reviewer returns one.',
+      confirmText: 'Submit',
+      onConfirm: () => _submitStaged(context, ref, staged),
+    );
+  }
+
+  /// Promotes every staged ("uploaded") document to submitted. This is the only
+  /// place a requirement becomes visible to reviewers.
+  Future<void> _submitStaged(
+    BuildContext context,
+    WidgetRef ref,
+    List<RequirementModel> staged,
+  ) async {
+    // Captured before any await, and paired with progressShown, so the spinner
+    // is only ever popped if it was actually pushed. Popping unconditionally
+    // would dismiss the screen itself whenever the dialog had been skipped.
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var progressShown = false;
+
+    try {
+      final studentId = await ScholarFirestoreService.currentStudentId();
+      if (studentId == null) {
+        if (context.mounted) {
+          DialogHelper.showErrorDialog(
+            context: context,
+            title: 'Not Signed In',
+            message: 'Please sign in again before submitting.',
+          );
+        }
+        return;
+      }
+
+      if (context.mounted) {
+        progressShown = true;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      final now = DateTime.now().toIso8601String();
+      for (final req in staged) {
+        await ScholarFirestoreService.updateStudentRequirement(
+          studentId,
+          req.id,
+          {
+            'status': 'submitted',
+            'submitted': true,
+            'fileName': req.fileName,
+            'fileSize': req.fileSize,
+            'fileType': req.fileType,
+            'fileUrl': req.fileUrl,
+            'submittedAt': now,
+          },
+        );
+      }
+      ref.invalidate(firestoreRequirementsListProvider);
+      ref.invalidate(firestoreRequirementsSummaryProvider);
+
+      if (progressShown) {
+        navigator.pop();
+        progressShown = false;
+      }
+      if (context.mounted) {
+        DialogHelper.showSuccessDialog(
+          context: context,
+          title: 'Submitted',
+          message:
+              '${staged.length} document${staged.length == 1 ? '' : 's'} sent for verification.',
+        );
+      }
+    } catch (_) {
+      if (progressShown) navigator.pop();
+      if (context.mounted) {
+        DialogHelper.showErrorDialog(
+          context: context,
+          title: 'Submission Failed',
+          message: 'Could not submit your documents. Please try again.',
         );
       }
     }
@@ -413,6 +650,7 @@ class _RequirementCard extends StatelessWidget {
   final String status;
   final String? fileName;
   final int? fileSize;
+  final String? fileUrl;
   final DateTime? uploadDate;
   final String? remarks;
   final VoidCallback onUpload;
@@ -424,18 +662,155 @@ class _RequirementCard extends StatelessWidget {
     required this.status,
     this.fileName,
     this.fileSize,
+    this.fileUrl,
     this.uploadDate,
     this.remarks,
     required this.onUpload,
     required this.onReupload,
   });
 
+  bool get _isImage {
+    final n = (fileName ?? '').toLowerCase();
+    final u = (fileUrl ?? '').toLowerCase();
+    final isImageExt = RegExp(r'\.(png|jpe?g|gif|webp|bmp)$').hasMatch(n);
+    return isImageExt ||
+        u.startsWith('data:image') ||
+        u.contains('/image/upload/');
+  }
+
+  /// Shows the submitted document inside the app. Hosted images and base64
+  /// data-URI images render inline (Chrome blocks opening `data:` URLs as a new
+  /// tab, so we can't just launch them); other file types open externally.
+  void _showDocument(BuildContext context) {
+    final url = fileUrl;
+    if (url == null || url.isEmpty) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640, maxHeight: 720),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        fileName ?? name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: _isImage
+                    ? _buildImage(url)
+                    : isPdfFile(fileName, url)
+                        ? InlinePdfPreview(url: url)
+                        : Padding(
+                            padding: const EdgeInsets.all(28),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.insert_drive_file_outlined,
+                                  size: 56,
+                                  color: AppColors.primary,
+                                ),
+                                const SizedBox(height: 16),
+                                ElevatedButton.icon(
+                                  onPressed: () =>
+                                      _openExternal(dialogContext, url),
+                                  icon: const Icon(Icons.open_in_new, size: 18),
+                                  label: const Text('Open file'),
+                                ),
+                              ],
+                            ),
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImage(String url) {
+    const errorWidget = Center(
+      child: Padding(
+        padding: EdgeInsets.all(28),
+        child: Text('Could not load image.'),
+      ),
+    );
+
+    if (url.startsWith('data:')) {
+      final idx = url.indexOf('base64,');
+      if (idx == -1) return errorWidget;
+      try {
+        final bytes = base64Decode(url.substring(idx + 'base64,'.length));
+        return InteractiveViewer(
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => errorWidget,
+          ),
+        );
+      } catch (_) {
+        return errorWidget;
+      }
+    }
+
+    return InteractiveViewer(
+      child: Image.network(
+        url,
+        fit: BoxFit.contain,
+        loadingBuilder: (context, child, progress) => progress == null
+            ? child
+            : const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(28),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+        errorBuilder: (_, _, _) => errorWidget,
+      ),
+    );
+  }
+
+  Future<void> _openExternal(BuildContext context, String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the document.')),
+      );
+    }
+  }
+
   Color _getStatusColor() {
     switch (status.toLowerCase()) {
       case 'verified':
         return AppColors.success;
-      case 'pending':
+      case 'submitted':
+      case 'resubmitted':
+      case 'under_review':
         return AppColors.warning;
+      case 'uploaded':
+        return AppColors.info;
       case 'rejected':
         return AppColors.error;
       default:
@@ -447,8 +822,12 @@ class _RequirementCard extends StatelessWidget {
     switch (status.toLowerCase()) {
       case 'verified':
         return Icons.verified;
-      case 'pending':
+      case 'submitted':
+      case 'resubmitted':
+      case 'under_review':
         return Icons.hourglass_empty;
+      case 'uploaded':
+        return Icons.attach_file_rounded;
       case 'rejected':
         return Icons.error;
       default:
@@ -464,8 +843,17 @@ class _RequirementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isSubmitted = status.toLowerCase() != 'not submitted';
-    final bool canReupload = status.toLowerCase() == 'rejected';
+    final normalized = status.toLowerCase();
+    final bool isSubmitted = normalized == 'submitted' ||
+        normalized == 'resubmitted' ||
+        normalized == 'under_review' ||
+        normalized == 'verified' ||
+        normalized == 'rejected';
+    // Attached but not yet submitted: the applicant can still view or swap the
+    // file, and it is not with the reviewers.
+    final bool isStaged = normalized == 'uploaded';
+    final bool canReupload = normalized == 'rejected' || isStaged;
+    final bool hasFile = fileUrl != null && fileUrl!.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -537,7 +925,7 @@ class _RequirementCard extends StatelessWidget {
             ],
           ),
 
-          if (isSubmitted && fileName != null) ...[
+          if ((isSubmitted || isStaged) && fileName != null) ...[
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(10),
@@ -583,7 +971,7 @@ class _RequirementCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: status.toLowerCase() == 'rejected'
+                color: normalized == 'rejected'
                     ? AppColors.errorLight
                     : AppColors.infoLight,
                 borderRadius: BorderRadius.circular(6),
@@ -593,7 +981,7 @@ class _RequirementCard extends StatelessWidget {
                   Icon(
                     Icons.comment,
                     size: 12,
-                    color: status.toLowerCase() == 'rejected'
+                    color: normalized == 'rejected'
                         ? AppColors.error
                         : AppColors.info,
                   ),
@@ -603,7 +991,7 @@ class _RequirementCard extends StatelessWidget {
                       remarks!,
                       style: TextStyle(
                         fontSize: 11,
-                        color: status.toLowerCase() == 'rejected'
+                        color: normalized == 'rejected'
                             ? AppColors.error
                             : AppColors.info,
                       ),
@@ -617,7 +1005,10 @@ class _RequirementCard extends StatelessWidget {
           ],
 
           const SizedBox(height: 10),
-          if (!isSubmitted)
+          // isStaged is excluded here so an attached-but-unsent document offers
+          // View/Replace (the canReupload branch) instead of a bare Upload CTA
+          // that would make it look like nothing had been attached.
+          if (!isSubmitted && !isStaged)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -630,33 +1021,58 @@ class _RequirementCard extends StatelessWidget {
               ),
             )
           else if (canReupload)
+            Row(
+              children: [
+                if (hasFile) ...[
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showDocument(context),
+                      icon: const Icon(Icons.visibility_outlined, size: 16),
+                      label:
+                          const Text('View', style: TextStyle(fontSize: 13)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onReupload,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: Text(
+                      isStaged ? 'Replace' : 'Re-upload',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor:
+                          isStaged ? AppColors.info : AppColors.warning,
+                      side: BorderSide(
+                        color: isStaged ? AppColors.info : AppColors.warning,
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else if (hasFile)
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: onReupload,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Re-upload', style: TextStyle(fontSize: 13)),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.warning,
-                  side: const BorderSide(color: AppColors.warning),
+              child: ElevatedButton.icon(
+                onPressed: () => _showDocument(context),
+                icon: const Icon(Icons.visibility_outlined, size: 16),
+                label: const Text(
+                  'View Document',
+                  style: TextStyle(fontSize: 13),
+                ),
+                style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                 ),
               ),
-            )
-          else
-            Row(
-              children: [
-                Icon(
-                  Icons.check_circle_outline,
-                  size: 14,
-                  color: _getStatusColor(),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  status.toLowerCase() == 'verified' ? 'Verified' : 'Pending',
-                  style: TextStyle(fontSize: 11, color: _getStatusColor()),
-                ),
-              ],
             ),
         ],
       ),

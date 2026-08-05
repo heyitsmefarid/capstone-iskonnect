@@ -26,11 +26,34 @@ class BfcspApplicationFormScreen extends ConsumerStatefulWidget {
 }
 
 class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFormScreen> {
-  final PageController _pageCtrl = PageController();
   int _currentStep = 0;
   bool _loading = false;
   bool _prefilled = false;
   String? _draftId;
+
+  /// Debounced draft autosave. Restarted on every keystroke so a save only
+  /// fires once the applicant pauses, rather than per character.
+  Timer? _autosaveTimer;
+  static const _autosaveDelay = Duration(seconds: 3);
+  DateTime? _lastAutosaveAt;
+
+  /// Single inventory of the form's text controllers, used both to attach the
+  /// autosave listener and to dispose them — keeping them in one list stops
+  /// the two lists drifting apart as fields are added.
+  List<TextEditingController> get _allControllers => [
+        _lastNameCtrl, _firstNameCtrl, _middleNameCtrl, _nicknameCtrl, _ageCtrl,
+        _dobCtrl, _pobCtrl, _citizenshipCtrl, _religionCtrl, _emailCtrl,
+        _fbCtrl, _contactCtrl, _houseNoCtrl, _streetCtrl, _subdivCtrl,
+        _barangayCtrl, _cityCtrl, _provinceCtrl, _shsTrackCtrl, _disabilityCtrl,
+        _ipCtrl, _skillsCtrl, _elemSchoolCtrl, _elemHonorsCtrl, _jhsSchoolCtrl,
+        _jhsHonorsCtrl, _shsSchoolCtrl, _shsHonorsCtrl, _shsGwa11Ctrl, _shsGwa12Ctrl,
+        _gwaCtrl, _examScoreCtrl, _fatherNameCtrl, _fatherContactCtrl, _fatherEdCtrl,
+        _fatherOccCtrl, _fatherIncCtrl, _motherNameCtrl, _motherMaidenCtrl,
+        _motherContactCtrl, _motherEdCtrl, _motherOccCtrl, _motherIncCtrl,
+        _guardianNameCtrl, _guardianContactCtrl, _guardianEdCtrl, _guardianOccCtrl,
+        _guardianIncCtrl, _siblingCountCtrl, _fourPsFromCtrl, _fourPsToCtrl,
+        _preferredSchoolCtrl, _prog1Ctrl, _prog2Ctrl, _prog3Ctrl, _essayCtrl,
+      ];
   late BfcspApplicationModel _app;
 
   final List<GlobalKey<FormState>> _formKeys = List.generate(5, (_) => GlobalKey<FormState>());
@@ -116,17 +139,114 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
     // the time the applicant finishes the form and taps Preview. Deliberately
     // not awaited — it must never delay building this screen.
     unawaited(BfcspFormApi.warmUp());
+    for (final c in _allControllers) {
+      c.addListener(_scheduleAutosave);
+    }
     _app = BfcspApplicationModel(userId: widget.userId ?? widget.student?.id);
     if (widget.draftId != null) {
       _draftId = widget.draftId;
       _loadDraft();
     } else {
-      _cityCtrl.text = 'Calapan City';
-      _provinceCtrl.text = 'Oriental Mindoro';
-      _citizenshipCtrl.text = 'Filipino';
-      _disabilityCtrl.text = 'N/A';
-      _ipCtrl.text = 'N/A';
-      _prefillFromRegistration();
+      // No id was handed in — look one up by userId before assuming this is a
+      // brand-new form. Callers open this screen without a draftId (the
+      // application-requirements card has no id to pass), so without this the
+      // applicant's saved answers were silently discarded every time they
+      // reopened the form, including after submitting.
+      _recoverExistingApplication();
+    }
+  }
+
+  /// Restarts the debounce. Called on every controller change.
+  void _scheduleAutosave() {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = Timer(_autosaveDelay, _autosaveDraft);
+  }
+
+  /// Silently persists the draft. Failures are swallowed on purpose — an
+  /// autosave must never interrupt typing with a dialog; the explicit
+  /// "Save as Draft" button still reports errors.
+  Future<void> _autosaveDraft() async {
+    // Never touch an already-submitted application: writing status 'draft'
+    // over it would silently un-submit the applicant.
+    if (_app.status == 'submitted') return;
+    if (!mounted || _loading) return;
+
+    _syncToModel();
+    _app.status = 'draft';
+    _app.savedAt = DateTime.now().toIso8601String();
+    try {
+      final data = _app.toMap();
+      final col =
+          FirebaseFirestore.instance.collection('scholarship_applications');
+      if (_draftId != null) {
+        await col.doc(_draftId).set(data).timeout(_firestoreTimeout);
+      } else {
+        final ref = await col.add(data).timeout(_firestoreTimeout);
+        _draftId = ref.id;
+      }
+      if (mounted) setState(() => _lastAutosaveAt = DateTime.now());
+    } catch (_) {
+      // Offline or timed out — keep the in-memory data and try again on the
+      // next pause.
+    }
+  }
+
+  /// Seeds a genuinely blank form with the constants and registration details.
+  void _seedNewForm() {
+    _cityCtrl.text = 'Calapan City';
+    _provinceCtrl.text = 'Oriental Mindoro';
+    _citizenshipCtrl.text = 'Filipino';
+    _disabilityCtrl.text = 'N/A';
+    _ipCtrl.text = 'N/A';
+    _prefillFromRegistration();
+  }
+
+  /// Finds this applicant's most recent application (draft or submitted) and
+  /// loads it, so reopening the form continues where they left off. Falls back
+  /// to a fresh form when they genuinely have none.
+  Future<void> _recoverExistingApplication() async {
+    final userId = widget.userId ?? widget.student?.id;
+    if (userId == null || userId.isEmpty) {
+      _seedNewForm();
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('scholarship_applications')
+          .where('userId', isEqualTo: userId)
+          .get()
+          .timeout(_firestoreTimeout);
+
+      if (snap.docs.isNotEmpty) {
+        // Newest first by savedAt. Sorted client-side deliberately: an
+        // orderBy would need a composite index, and an applicant has only a
+        // handful of these documents.
+        final docs = snap.docs.toList()
+          ..sort((a, b) => (b.data()['savedAt'] ?? '')
+              .toString()
+              .compareTo((a.data()['savedAt'] ?? '').toString()));
+        _draftId = docs.first.id;
+        _app = BfcspApplicationModel.fromMap(docs.first.data());
+        if (mounted) {
+          setState(() {
+            _populateControllers();
+            _loading = false;
+          });
+        }
+        return;
+      }
+    } catch (_) {
+      // Unreachable Firestore must not block a first-time applicant from
+      // filling the form; fall through to a fresh one.
+    }
+
+    if (mounted) {
+      setState(() {
+        _seedNewForm();
+        _loading = false;
+      });
     }
   }
 
@@ -309,6 +429,15 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
   static const _firestoreTimeout = Duration(seconds: 15);
 
   Future<void> _saveAsDraft() async {
+    // Same protection as the autosave: saving a draft over a submitted
+    // application would reset its status and pull it out of review.
+    if (_app.status == 'submitted') {
+      _showSnack(
+        'This application has already been submitted and can no longer be changed.',
+        error: true,
+      );
+      return;
+    }
     _syncToModel();
     setState(() => _loading = true);
     try {
@@ -420,7 +549,6 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
   void _goToStep(int step) {
     if (step < _currentStep || _formKeys[_currentStep].currentState?.validate() == true) {
       setState(() => _currentStep = step);
-      _pageCtrl.animateToPage(step, duration: const Duration(milliseconds: 350), curve: Curves.easeInOut);
     }
   }
 
@@ -459,21 +587,11 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
 
   @override
   void dispose() {
-    _pageCtrl.dispose();
-    for (final c in [
-      _lastNameCtrl, _firstNameCtrl, _middleNameCtrl, _nicknameCtrl, _ageCtrl,
-      _dobCtrl, _pobCtrl, _citizenshipCtrl, _religionCtrl, _emailCtrl,
-      _fbCtrl, _contactCtrl, _houseNoCtrl, _streetCtrl, _subdivCtrl,
-      _barangayCtrl, _cityCtrl, _provinceCtrl, _shsTrackCtrl, _disabilityCtrl,
-      _ipCtrl, _skillsCtrl, _elemSchoolCtrl, _elemHonorsCtrl, _jhsSchoolCtrl,
-      _jhsHonorsCtrl, _shsSchoolCtrl, _shsHonorsCtrl, _shsGwa11Ctrl, _shsGwa12Ctrl,
-      _gwaCtrl, _examScoreCtrl, _fatherNameCtrl, _fatherContactCtrl, _fatherEdCtrl,
-      _fatherOccCtrl, _fatherIncCtrl, _motherNameCtrl, _motherMaidenCtrl,
-      _motherContactCtrl, _motherEdCtrl, _motherOccCtrl, _motherIncCtrl,
-      _guardianNameCtrl, _guardianContactCtrl, _guardianEdCtrl, _guardianOccCtrl,
-      _guardianIncCtrl, _siblingCountCtrl, _fourPsFromCtrl, _fourPsToCtrl,
-      _preferredSchoolCtrl, _prog1Ctrl, _prog2Ctrl, _prog3Ctrl, _essayCtrl,
-    ]) { c.dispose(); }
+    _autosaveTimer?.cancel();
+    for (final c in _allControllers) {
+      c.removeListener(_scheduleAutosave);
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -486,6 +604,18 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         actions: [
+          // Autosave runs silently, so show when it last succeeded — otherwise
+          // the applicant has no way to tell their work is being kept.
+          if (_lastAutosaveAt != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Text(
+                  'Saved ${TimeOfDay.fromDateTime(_lastAutosaveAt!).format(context)}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+              ),
+            ),
           TextButton.icon(
             onPressed: _loading ? null : _saveAsDraft,
             icon: const Icon(Icons.save_outlined, color: Colors.white),
@@ -499,9 +629,14 @@ class _BfcspApplicationFormScreenState extends ConsumerState<BfcspApplicationFor
               children: [
                 _buildStepIndicator(cs),
                 Expanded(
-                  child: PageView(
-                    controller: _pageCtrl,
-                    physics: const NeverScrollableScrollPhysics(),
+                  // IndexedStack, not PageView: the step shown must always be
+                  // driven by _currentStep alone. PageView needs a *second*,
+                  // separately-animated source of truth (its PageController),
+                  // and the two falling out of sync is exactly what put the
+                  // Step 1 form on screen underneath a stepper header and nav
+                  // buttons that both correctly showed Step 5 as active.
+                  child: IndexedStack(
+                    index: _currentStep,
                     children: [
                       _buildStep1(),
                       _buildStep2(),

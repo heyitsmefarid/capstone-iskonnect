@@ -16,8 +16,13 @@ import 'package:uuid/uuid.dart';
 
 class AddGradeScreen extends ConsumerStatefulWidget {
   final bool corOnly;
+  final bool cogOnly;
 
-  const AddGradeScreen({super.key, this.corOnly = false});
+  const AddGradeScreen({
+    super.key,
+    this.corOnly = false,
+    this.cogOnly = false,
+  });
 
   @override
   ConsumerState<AddGradeScreen> createState() => _AddGradeScreenState();
@@ -139,9 +144,27 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
         return;
       }
 
-      ref
-          .read(corSubmissionsProvider.notifier)
-          .submitCor(
+      // Preview the chosen COR (image) or confirm the PDF before submitting.
+      if (mounted) {
+        final confirmed = await DialogHelper.showFilePreviewConfirm(
+          context: context,
+          fileName: file.name,
+          fileSize: file.size,
+          bytes: file.bytes,
+        );
+        if (!confirmed) return;
+      }
+
+      // Blocking spinner while the file uploads to storage (Cloudinary).
+      if (mounted) {
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      final ok = await ref.read(corSubmissionsProvider.notifier).submitCor(
             academicYear: _selectedAcademicYear,
             semester: _selectedSemester,
             fileName: file.name,
@@ -152,20 +175,124 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
             fileBytes: file.bytes,
           );
 
-      if (mounted) {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+      if (!mounted) return;
+      if (ok) {
         DialogHelper.showSuccessDialog(
           context: context,
           title: 'COR Uploaded',
           message:
               '${file.name} has been uploaded for $_selectedSemester, A.Y. $_selectedAcademicYear.',
         );
+      } else {
+        DialogHelper.showErrorDialog(
+          context: context,
+          title: 'Upload Failed',
+          message:
+              'The file could not be uploaded. Please check your connection and try again.',
+        );
       }
     } catch (_) {
+      if (mounted) Navigator.of(context, rootNavigator: true).maybePop();
       if (mounted) {
         DialogHelper.showErrorDialog(
           context: context,
           title: 'Upload Failed',
           message: 'An error occurred while uploading your COR.',
+        );
+      }
+    }
+  }
+
+  Future<void> _handleCogUpload() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.first;
+
+      final ext = (file.extension ?? file.name.split('.').last).toLowerCase();
+      const allowed = ['pdf', 'jpg', 'jpeg', 'png'];
+      if (!allowed.contains(ext)) {
+        if (mounted) {
+          DialogHelper.showErrorDialog(
+            context: context,
+            title: 'Unsupported File',
+            message: 'Please upload a PDF, JPG, or PNG file.',
+          );
+        }
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        if (mounted) {
+          DialogHelper.showErrorDialog(
+            context: context,
+            title: 'File Too Large',
+            message: 'Please select a file smaller than 5MB.',
+          );
+        }
+        return;
+      }
+
+      // Preview the chosen COG (image) or confirm the PDF before submitting.
+      if (mounted) {
+        final confirmed = await DialogHelper.showFilePreviewConfirm(
+          context: context,
+          fileName: file.name,
+          fileSize: file.size,
+          bytes: file.bytes,
+        );
+        if (!confirmed) return;
+      }
+
+      // Blocking spinner while the file uploads to storage (Cloudinary).
+      if (mounted) {
+        showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      final ok = await ref.read(cogSubmissionsProvider.notifier).submitCog(
+            academicYear: _selectedAcademicYear,
+            semester: _selectedSemester,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.extension ?? 'unknown',
+            fileBytes: file.bytes,
+          );
+
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+      if (!mounted) return;
+      if (ok) {
+        DialogHelper.showSuccessDialog(
+          context: context,
+          title: 'COG Uploaded',
+          message:
+              '${file.name} has been uploaded for $_selectedSemester, A.Y. $_selectedAcademicYear.',
+        );
+      } else {
+        DialogHelper.showErrorDialog(
+          context: context,
+          title: 'Upload Failed',
+          message:
+              'The file could not be uploaded. Please check your connection and try again.',
+        );
+      }
+    } catch (_) {
+      if (mounted) Navigator.of(context, rootNavigator: true).maybePop();
+      if (mounted) {
+        DialogHelper.showErrorDialog(
+          context: context,
+          title: 'Upload Failed',
+          message: 'An error occurred while uploading your COG.',
         );
       }
     }
@@ -177,9 +304,17 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
     final isCorRequired = !(student?.isStAugustine ?? false);
     final corSubmissions = ref.watch(corSubmissionsProvider);
     final corSubmission = corSubmissions[_selectedPeriodKey];
+    final cogSubmissions = ref.watch(cogSubmissionsProvider);
+    final cogSubmission = cogSubmissions[_selectedPeriodKey];
+
+    final title = widget.cogOnly
+        ? 'Add COG'
+        : widget.corOnly
+            ? 'Add COR'
+            : 'Add Subject';
 
     return Scaffold(
-      appBar: CustomAppBar(title: widget.corOnly ? 'Add COR' : 'Add Subject'),
+      appBar: CustomAppBar(title: title),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Form(
@@ -207,9 +342,11 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        widget.corOnly
-                            ? 'Upload your Certificate of Registration for the selected semester.'
-                            : "Add your subject details. You can input the grade once it's released.",
+                        widget.cogOnly
+                            ? 'Upload your Certificate of Grades for the selected semester.'
+                            : widget.corOnly
+                                ? 'Upload your Certificate of Registration for the selected semester.'
+                                : "Add your subject details. You can input the grade once it's released.",
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.info,
@@ -221,7 +358,7 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
               ),
               const SizedBox(height: 32),
 
-              if (!widget.corOnly) ...[
+              if (!widget.corOnly && !widget.cogOnly) ...[
                 // Subject Info Section
                 const Text(
                   'Subject Information',
@@ -234,7 +371,7 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
                 const SizedBox(height: 16),
                 CustomTextField(
                   controller: _subjectCodeController,
-                  label: 'Subject Code',
+                  label: 'Course Code',
                   hint: 'e.g., IT 101',
                   prefixIcon: Icons.code,
                   validator: Validators.required,
@@ -242,7 +379,7 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
                 const SizedBox(height: 16),
                 CustomTextField(
                   controller: _subjectNameController,
-                  label: 'Subject Name',
+                  label: 'Course Name',
                   hint: 'e.g., Introduction to Computing',
                   prefixIcon: Icons.book,
                   validator: Validators.required,
@@ -411,9 +548,23 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
                       Column(
                         children: [
                           CustomButton(
+                            text: 'View COR',
+                            onPressed: () => DialogHelper.showFileViewer(
+                              context: context,
+                              fileName: corSubmission.fileName,
+                              bytes: corSubmission.fileBytes,
+                              fileUrl: corSubmission.fileUrl,
+                            ),
+                            icon: Icons.visibility_outlined,
+                            isOutlined: true,
+                            width: double.infinity,
+                          ),
+                          const SizedBox(height: 8),
+                          CustomButton(
                             text: 'Replace COR',
                             onPressed: _handleCorUpload,
                             icon: Icons.upload_file_rounded,
+                            isOutlined: true,
                             width: double.infinity,
                           ),
                           const SizedBox(height: 8),
@@ -437,9 +588,135 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
               ),
               ],
 
+              if (widget.cogOnly) ...[
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.divider),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.assignment_turned_in_outlined,
+                            size: 18,
+                            color: AppColors.textPrimary,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Certificate of Grades',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Upload once per semester (PDF/JPG/PNG).',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (cogSubmission != null)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: AppColors.success.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle_outline_rounded,
+                                size: 16,
+                                color: AppColors.success,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  cogSubmission.fileName,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.success,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 10),
+                      if (cogSubmission == null)
+                        CustomButton(
+                          text: 'Upload COG',
+                          onPressed: _handleCogUpload,
+                          icon: Icons.upload_file_rounded,
+                          width: double.infinity,
+                        )
+                      else
+                        Column(
+                          children: [
+                            CustomButton(
+                              text: 'View COG',
+                              onPressed: () => DialogHelper.showFileViewer(
+                                context: context,
+                                fileName: cogSubmission.fileName,
+                                fileUrl: cogSubmission.fileUrl,
+                              ),
+                              icon: Icons.visibility_outlined,
+                              isOutlined: true,
+                              width: double.infinity,
+                            ),
+                            const SizedBox(height: 8),
+                            CustomButton(
+                              text: 'Replace COG',
+                              onPressed: _handleCogUpload,
+                              icon: Icons.upload_file_rounded,
+                              isOutlined: true,
+                              width: double.infinity,
+                            ),
+                            const SizedBox(height: 8),
+                            CustomButton(
+                              text: 'Remove',
+                              onPressed: () {
+                                ref
+                                    .read(cogSubmissionsProvider.notifier)
+                                    .removeCog(
+                                      academicYear: _selectedAcademicYear,
+                                      semester: _selectedSemester,
+                                    );
+                              },
+                              isOutlined: true,
+                              width: double.infinity,
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 40),
 
-              if (!widget.corOnly) ...[
+              if (!widget.corOnly && !widget.cogOnly) ...[
                 // Submit Button
                 GradientButton(
                   text: 'Add Subject',
@@ -450,9 +727,9 @@ class _AddGradeScreenState extends ConsumerState<AddGradeScreen> {
                 const SizedBox(height: 16),
               ],
               CustomButton(
-                text: widget.corOnly ? 'Submit' : 'Cancel',
+                text: (widget.corOnly || widget.cogOnly) ? 'Submit' : 'Cancel',
                 onPressed: () => context.pop(),
-                isOutlined: true,
+                isOutlined: !(widget.corOnly || widget.cogOnly),
                 width: double.infinity,
               ),
               const SizedBox(height: 24),

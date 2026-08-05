@@ -74,6 +74,46 @@ void main() {
     });
   });
 
+  group('rejection fields', () {
+    test('rejectionSeen defaults to false and rejectionReason to null', () {
+      final student = _buildBaseStudent();
+      expect(student.rejectionSeen, isFalse);
+      expect(student.rejectionReason, isNull);
+    });
+
+    test('copyWith updates rejectionReason/rejectionSeen', () {
+      final student = _buildBaseStudent().copyWith(
+        rejectionReason: 'Incomplete requirements',
+        rejectionSeen: true,
+      );
+      expect(student.rejectionReason, 'Incomplete requirements');
+      expect(student.rejectionSeen, isTrue);
+    });
+
+    test('round-trips rejectionReason/rejectionSeen through JSON', () {
+      final student = _buildBaseStudent().copyWith(
+        rejectionReason: 'Incomplete requirements',
+        rejectionSeen: true,
+      );
+
+      final restored = StudentModel.fromJson(student.toJson());
+
+      expect(restored.rejectionReason, 'Incomplete requirements');
+      expect(restored.rejectionSeen, isTrue);
+    });
+
+    test('fromJson defaults rejectionReason/rejectionSeen when absent (legacy doc)', () {
+      final json = {
+        'firstName': 'Ana', 'lastName': 'Cruz', 'email': 'a@example.com',
+        'street': 'Rizal St', 'barangay': 'Poblacion', 'city': 'Calapan',
+        'province': 'Oriental Mindoro', 'gender': 'Female',
+      };
+      final model = StudentModel.fromJson(json);
+      expect(model.rejectionReason, isNull);
+      expect(model.rejectionSeen, isFalse);
+    });
+  });
+
   group('account-activation fields', () {
     test('fromJson defaults new activation fields when absent (legacy doc)', () {
       final json = {
@@ -151,6 +191,46 @@ void main() {
       final updated = model.copyWith(emergencyContactName: 'Juana Cruz', emergencyContactPhone: '0912-345-6789');
       expect(updated.emergencyContactName, 'Juana Cruz');
       expect(updated.emergencyContactPhone, '0912-345-6789');
+    });
+  });
+
+  group('idCardAddress', () {
+    test('is barangay and city only — no house number, street or province', () {
+      final student = _buildBaseStudent().copyWith(houseNo: '123');
+
+      expect(student.idCardAddress, 'San Vicente, Calapan City');
+    });
+
+    test('omits the "Brgy." prefix that fullAddress carries', () {
+      final student = _buildBaseStudent();
+
+      expect(student.idCardAddress, isNot(contains('Brgy')));
+      // fullAddress is deliberately left untouched for the profile screen.
+      expect(student.fullAddress, contains('Brgy.'));
+    });
+
+    test('appends the "City" suffix the stored value omits', () {
+      expect(_buildBaseStudent().copyWith(city: 'Calapan').idCardAddress,
+          endsWith('Calapan City'));
+    });
+
+    test('does not double the suffix when it is already stored', () {
+      for (final stored in ['Calapan City', 'calapan city', 'CALAPAN CITY']) {
+        expect(
+          _buildBaseStudent().copyWith(city: stored).idCardAddress,
+          endsWith(stored),
+          reason: '"$stored" already carries the suffix',
+        );
+      }
+    });
+
+    test('drops blank parts rather than emitting a stray comma', () {
+      expect(_buildBaseStudent().copyWith(barangay: '').idCardAddress, 'Calapan City');
+      expect(_buildBaseStudent().copyWith(city: '').idCardAddress, 'San Vicente');
+      expect(
+        _buildBaseStudent().copyWith(barangay: '  ', city: '  ').idCardAddress,
+        isEmpty,
+      );
     });
   });
 }

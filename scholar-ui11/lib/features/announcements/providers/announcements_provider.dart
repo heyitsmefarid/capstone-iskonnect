@@ -4,9 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iskonnectttt/core/models/announcement_model.dart';
 import 'package:iskonnectttt/core/models/message_attachment_model.dart';
 import 'package:iskonnectttt/core/models/student_model.dart';
+import 'package:iskonnectttt/core/services/announcement_notification_service.dart';
 import 'package:iskonnectttt/core/services/scholar_firestore_service.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:uuid/uuid.dart';
+
+/// The announcements in [current] whose id isn't in [knownIds] yet — i.e.
+/// ones that showed up since the last snapshot. Pure so it's testable
+/// without a live Firestore stream.
+List<AnnouncementModel> newAnnouncementsSince(
+  List<AnnouncementModel> current,
+  Set<String> knownIds,
+) {
+  return current.where((a) => !knownIds.contains(a.id)).toList();
+}
 
 class AnnouncementsNotifier extends StateNotifier<List<AnnouncementModel>> {
   AnnouncementsNotifier() : super(const []) {
@@ -20,10 +31,31 @@ class AnnouncementsNotifier extends StateNotifier<List<AnnouncementModel>> {
   // live updates stream in.
   final Set<String> _readIds = {};
 
+  // Ids already seen across snapshots, so a local notification only fires
+  // for announcements that genuinely appear after the app is already
+  // running — not null until the first snapshot arrives, so that initial
+  // load (existing history) never triggers a burst of notifications.
+  Set<String>? _knownIds;
+
   void _subscribe() {
     _subscription =
         ScholarFirestoreService.announcementsStream().listen((records) {
-      state = records.map(_mapRecord).toList();
+      final mapped = records.map(_mapRecord).toList();
+      if (_knownIds != null) {
+        for (final announcement
+            in newAnnouncementsSince(mapped, _knownIds!)) {
+          AnnouncementNotificationService.notify(announcement);
+        }
+      }
+      _knownIds = mapped.map((a) => a.id).toSet();
+      // Guards against a stream event arriving after this notifier was
+      // disposed — e.g. resetPerStudentProviders invalidates this provider on
+      // every login/logout, and Riverpod builds a provider that had never
+      // been read before disposing it, so a fresh notifier can be constructed
+      // and torn down again before its first Firestore event even arrives.
+      // Without this check that raced event's `state = mapped` throws
+      // "Bad state: Tried to use ... after dispose was called".
+      if (mounted) state = mapped;
     });
   }
 

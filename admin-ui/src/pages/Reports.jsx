@@ -36,7 +36,10 @@ const REPORT_CATEGORIES = {
 };
 
 export default function Reports() {
-  const { applicants, schools, catalogSchools, schoolYears } = useApp();
+  const { applicants, catalogSchools, schoolYears, evaluationRubric } = useApp();
+  const economicScoreLabels = Object.fromEntries(
+    evaluationRubric.economicRubric.map((r) => [r.points, r.label])
+  );
   const { onMenuClick } = useOutletContext() || {};
   const [selectedReport, setSelectedReport] = useState(null);
   const [liveSummary, setLiveSummary] = useState(null);
@@ -368,11 +371,39 @@ export default function Reports() {
 
   const getSelectedReportInfo = () => reportTypes.find(r => r.id === selectedReport);
 
+  // Academic Year / Semester filtering can't just compare the flat
+  // schoolYear/semester fields: those are set once at registration and are
+  // never updated afterward — the admin's "advance active term" action
+  // (enrollActiveScholarsInSemester) only appends to enrolledSemesters, so a
+  // scholar active for several terms still has their original registration
+  // term in the flat fields. enrolledSemesters is the real per-term record;
+  // fall back to the flat fields only for scholars with no term history yet
+  // (e.g. a still-pending applicant).
+  const matchesAcademicTerm = (a) => {
+    const enrolled = Array.isArray(a.enrolledSemesters) ? a.enrolledSemesters : [];
+    if (enrolled.length === 0) {
+      return matchesExact(a.schoolYear, filterAY) && matchesExact(a.semester, filterSemester);
+    }
+    if (!filterAY && !filterSemester) return true;
+    return enrolled.some(
+      (e) => matchesExact(e.schoolYear, filterAY) && matchesExact(e.semester, filterSemester)
+    );
+  };
+
+  // A "Scholar" is an applicant who has been approved into the program.
+  // "pending" (awaiting review) and "rejected" applicants are not scholars
+  // and must never count in scholar-facing reports/statistics, regardless
+  // of the "All Statuses" filter — that filter only enumerates statuses a
+  // scholar can hold (see the Scholar Status dropdown below), so "all"
+  // means all scholar statuses, not literally every applicant.
+  const SCHOLAR_STATUSES = ['approved', 'active', 'on-hold', 'graduated', 'terminated'];
+
   const getFilteredScholars = () => {
     return applicants.filter(a => {
+      if (!SCHOLAR_STATUSES.includes(a.status)) return false;
       if (!matchesExact(a.school, filterHEI)) return false;
       if (!matchesExact(a.status, filterStatus)) return false;
-      if (filterAY && a.schoolYear && a.schoolYear !== filterAY) return false;
+      if (!matchesAcademicTerm(a)) return false;
       return true;
     });
   };
@@ -420,8 +451,8 @@ export default function Reports() {
   const generateListPerHEI = () => {
     const scholars = getFilteredScholars();
 
-    return schools.flatMap(school => {
-      const schoolScholars = scholars.filter(s => s.school === school.name);
+    return schoolOptions.flatMap(schoolName => {
+      const schoolScholars = scholars.filter(s => s.school === schoolName);
       const totalFunds = schoolScholars.reduce(
         (sum, s) => sum + ((s.semestersUsed || 0) * (s.amountGranted || 0)),
         0
@@ -429,7 +460,7 @@ export default function Reports() {
 
       if (schoolScholars.length === 0) {
         return [{
-          'HEI Name': school.name,
+          'HEI Name': schoolName,
           'Total Number of Scholars': 0,
           'Scholar Name': 'N/A',
           'Program': 'N/A',
@@ -440,7 +471,7 @@ export default function Reports() {
       }
 
       return schoolScholars.map(s => ({
-        'HEI Name': school.name,
+        'HEI Name': schoolName,
         'Total Number of Scholars': schoolScholars.length,
         'Scholar Name': `${s.firstName} ${s.lastName}`,
         'Program': s.program,
@@ -455,7 +486,6 @@ export default function Reports() {
     const scholars = getFilteredScholars();
 
     const total = scholars.length || 1;
-    const nowYear = new Date().getFullYear();
 
     const genderMap = scholars.reduce((acc, s) => {
       const key = s.gender || 'Unspecified';
@@ -463,10 +493,20 @@ export default function Reports() {
       return acc;
     }, {});
 
+    // birthDate is stored as a formatted string (e.g. "January 15, 2001"),
+    // not "YYYY-MM-DD", so it must go through Date parsing rather than a
+    // substring — a leading slice(0, 4) here would grab "Janu" and NaN out.
     const ageBracketMap = { '17-19': 0, '20-22': 0, '23-25': 0, '26+': 0 };
     scholars.forEach(s => {
       if (!s.birthDate) return;
-      const age = nowYear - Number(String(s.birthDate).slice(0, 4));
+      const dob = new Date(s.birthDate);
+      if (Number.isNaN(dob.getTime())) return;
+      const now = new Date();
+      let age = now.getFullYear() - dob.getFullYear();
+      const hadBirthdayThisYear =
+        now.getMonth() > dob.getMonth() ||
+        (now.getMonth() === dob.getMonth() && now.getDate() >= dob.getDate());
+      if (!hadBirthdayThisYear) age -= 1;
       if (age <= 19) ageBracketMap['17-19'] += 1;
       else if (age <= 22) ageBracketMap['20-22'] += 1;
       else if (age <= 25) ageBracketMap['23-25'] += 1;
@@ -480,11 +520,7 @@ export default function Reports() {
     }, {});
 
     const socioeconomicMap = scholars.reduce((acc, s) => {
-      const score = s.economicScore;
-      let key = 'Not Tagged';
-      if (score === 1) key = 'Low Income';
-      else if (score === 2) key = 'Lower-Middle Income';
-      else if (score === 3) key = 'Middle Income';
+      const key = economicScoreLabels[s.economicScore] || 'Not Tagged';
       acc[key] = (acc[key] || 0) + 1;
       return acc;
     }, {});
@@ -522,14 +558,14 @@ export default function Reports() {
 
   const generateHEIFundAllocation = () => {
     const scholars = getFilteredScholars();
-    return schools.map(school => {
-      const schoolScholars = scholars.filter(s => s.school === school.name);
+    return schoolOptions.map(schoolName => {
+      const schoolScholars = scholars.filter(s => s.school === schoolName);
       const totalRequired = schoolScholars.reduce((sum, s) => sum + (s.tuitionFee || 0) + (s.miscFee || 0), 0);
       const totalDisbursed = schoolScholars.reduce((sum, s) => sum + (s.amountGranted || 0), 0);
       const remaining = totalRequired - totalDisbursed;
-      
+
       return {
-        'HEI Name': school.name,
+        'HEI Name': schoolName,
         'Number of Scholars': schoolScholars.length,
         'Total Required Funds': `₱${totalRequired.toLocaleString()}`,
         'Total Disbursed': `₱${totalDisbursed.toLocaleString()}`,
@@ -614,9 +650,7 @@ export default function Reports() {
   };
 
   const generateRetentionContinuation = () => {
-    const scholars = getFilteredScholars().filter(
-      s => ['active', 'on-hold', 'approved', 'graduated', 'terminated'].includes(s.status)
-    );
+    const scholars = getFilteredScholars();
 
     return scholars.map(s => {
       const previousStatus = s.status === 'active' ? 'Active' : s.status === 'on-hold' ? 'On-Hold' : s.status;
@@ -857,15 +891,15 @@ export default function Reports() {
 
   const generateScholarsPerHEI = () => {
     const scholars = getFilteredScholars();
-    return schools.map(school => {
-      const schoolScholars = scholars.filter(s => s.school === school.name);
+    return schoolOptions.map(schoolName => {
+      const schoolScholars = scholars.filter(s => s.school === schoolName);
       const active = schoolScholars.filter(s => s.status === 'active').length;
       const onHold = schoolScholars.filter(s => s.status === 'on-hold').length;
       const graduated = schoolScholars.filter(s => s.status === 'graduated').length;
       const terminated = schoolScholars.filter(s => s.status === 'terminated').length;
-      
+
       return {
-        'HEI Name': school.name,
+        'HEI Name': schoolName,
         'Active Scholars': active,
         'On-Hold': onHold,
         'Graduated': graduated,
@@ -923,18 +957,17 @@ export default function Reports() {
 
   const generateGraduationProgressRate = () => {
     const scholars = getFilteredScholars();
-    const awardedScholars = scholars.filter(a => a.status !== 'pending');
-    const totalAwarded = awardedScholars.length;
+    const totalAwarded = scholars.length;
     const graduated = scholars.filter(a => a.status === 'graduated').length;
     const stillActive = scholars.filter(a => a.status === 'active').length;
     const terminated = scholars.filter(a => a.status === 'terminated').length;
     const onHold = scholars.filter(a => a.status === 'on-hold').length;
-    
+
     const graduationRate = totalAwarded > 0 ? ((graduated / totalAwarded) * 100).toFixed(1) : '0';
     const retentionRate = totalAwarded > 0 ? (((graduated + stillActive) / totalAwarded) * 100).toFixed(1) : '0';
     const attritionRate = totalAwarded > 0 ? ((terminated / totalAwarded) * 100).toFixed(1) : '0';
-    
-    return awardedScholars.map(s => ({
+
+    return scholars.map(s => ({
       'Scholar ID': s.scholarId || 'N/A',
       'Scholar Name': `${s.firstName} ${s.lastName}`,
       'HEI': s.school,
@@ -962,7 +995,7 @@ export default function Reports() {
 
   const exportToPDF = async (data, title, filename) => {
     const images = await loadLetterheadImages();
-    const doc = new jsPDF('l', 'mm', 'a4');
+    const doc = new jsPDF('p', 'mm', 'letter');
     const { headerHeight, footerHeight } = getLetterheadLayout(doc);
 
     doc.setFontSize(16);
@@ -1079,10 +1112,9 @@ export default function Reports() {
               <label>Academic Year</label>
               <select value={filterAY} onChange={(e) => { setFilterAY(e.target.value); }}>
                 <option value="">All Academic Years</option>
-                <option value="2023-2024">2023-2024</option>
-                <option value="2024-2025">2024-2025</option>
-                <option value="2025-2026">2025-2026</option>
-                <option value="2026-2027">2026-2027</option>
+                {academicYearOptions.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
               </select>
             </div>
             <div className="filter-item">
@@ -1097,8 +1129,8 @@ export default function Reports() {
               <label>HEI</label>
               <select value={filterHEI} onChange={(e) => { setFilterHEI(e.target.value); }}>
                 <option value="">All HEIs</option>
-                {schools.map(school => (
-                  <option key={school.id} value={school.name}>{school.name}</option>
+                {schoolOptions.map(schoolName => (
+                  <option key={schoolName} value={schoolName}>{schoolName}</option>
                 ))}
               </select>
             </div>

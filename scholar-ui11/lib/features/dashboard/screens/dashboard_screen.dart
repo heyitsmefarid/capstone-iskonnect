@@ -35,8 +35,10 @@ class DashboardScreen extends ConsumerWidget {
     final announcements = ref.watch(filteredAnnouncementsProvider);
     final unreadCount = ref.watch(unreadAnnouncementsCountProvider);
     final totalDisbursed = ref.watch(totalDisbursedAmountProvider);
-    // Total subjects on record (admin-encoded grades reflect here immediately).
-    final totalSubjects = ref.watch(gradesProvider).length;
+    // Subjects for the currently active term only (admin-encoded grades
+    // reflect here immediately) — a past semester's subjects shouldn't keep
+    // counting once a new term has started.
+    final totalSubjects = ref.watch(currentTermGradesProvider).length;
     final timelineProgress = ref.watch(timelineProgressProvider);
 
     if (student == null) {
@@ -295,10 +297,15 @@ class DashboardScreen extends ConsumerWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  // Prefer real disbursement records; otherwise
-                                  // fall back to the admin-granted total
-                                  // (completed semesters × per-sem grant).
-                                  '₱${Formatters.formatCurrency(totalDisbursed > 0 ? totalDisbursed : student.semestersCompleted * student.amountGranted)}',
+                                  // Real disbursement records only — semestersCompleted
+                                  // is a pure term-progress counter now (advances for
+                                  // on-hold/unverified scholars too, see AppContext's
+                                  // enrollActiveScholarsInSemester), so multiplying it by
+                                  // the grant rate would fabricate money that was never
+                                  // actually granted. Matches profile_screen.dart /
+                                  // scholarship_timeline_screen.dart, which already only
+                                  // trust totalDisbursed.
+                                  '₱${Formatters.formatCurrency(totalDisbursed)}',
                                   style: const TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.w900,

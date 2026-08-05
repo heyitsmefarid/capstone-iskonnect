@@ -12,6 +12,7 @@ import { createStaffAccount, setStaffStatus, resetStaffPassword } from '../servi
 const ROLES = [
   { value: 'staff', label: 'Staff', description: 'Can encode and edit records (tracked in Audit Trail)' },
   { value: 'admin', label: 'Administrator', description: 'Full access; manage staff, approve/reject, audit logs' },
+  { value: 'viewer', label: 'Viewer', description: 'View-only: Dashboard, Scholars List, Attendance, and Academic Records — no editing' },
 ];
 
 export default function StaffManagement() {
@@ -40,7 +41,7 @@ export default function StaffManagement() {
         const rows = [];
         snapshot.docs.forEach((docSnap) => {
           const d = docSnap.data();
-          if (d.role !== 'admin' && d.role !== 'staff') return;
+          if (!['admin', 'staff', 'viewer'].includes(d.role)) return;
           rows.push({
             id: docSnap.id,
             name: d.displayName || d.name || d.email || 'Unknown',
@@ -158,6 +159,7 @@ export default function StaffManagement() {
 
   const getRoleBadge = (role) => {
     if (role === 'admin') return <span className="role-badge admin">Administrator</span>;
+    if (role === 'viewer') return <span className="role-badge viewer">Viewer</span>;
     return <span className="role-badge staff">Staff</span>;
   };
 
@@ -175,7 +177,8 @@ export default function StaffManagement() {
           <Info size={16} />
           <span>
             <strong>Staff</strong> can encode, view, and edit records — every change is recorded in the Audit Trail.&nbsp;
-            <strong>Administrators</strong> additionally approve applications and manage staff, users, audit logs, and system settings.
+            <strong>Administrators</strong> additionally approve applications and manage staff, users, audit logs, and system settings.&nbsp;
+            <strong>Viewers</strong> can only view the Dashboard, Scholars List, Attendance, and Academic Records — no editing.
           </span>
         </div>
 
@@ -337,6 +340,7 @@ export default function StaffManagement() {
         .role-badge { padding: 3px 10px; border-radius: 12px; font-size: 0.78rem; font-weight: 700; }
         .role-badge.admin { background: rgba(99,102,241,0.15); color: var(--primary); }
         .role-badge.staff { background: rgba(245,158,11,0.15); color: #d97706; }
+        .role-badge.viewer { background: rgba(107,114,128,0.15); color: #6b7280; }
         .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; flex-shrink: 0; }
         .table-container { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--radius); overflow-x: auto; }
         .inline-perms { margin-top: 8px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }

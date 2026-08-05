@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iskonnectttt/core/models/student_model.dart';
 import 'package:iskonnectttt/core/constants/firebase_env.dart';
+import 'package:iskonnectttt/core/providers/session_reset.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Shared preferences keys
@@ -54,7 +55,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _studentSub;
 
-  AuthNotifier() : super(const AuthState()) {
+  // Needed to invalidate the other per-scholar providers (grades, attendance,
+  // messages, ...) on login/logout — see resetPerStudentProviders.
+  final Ref _ref;
+
+  AuthNotifier(this._ref) : super(const AuthState()) {
     _initializeAuth();
   }
 
@@ -150,72 +155,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (_) {
       // Keep local auth flow working even if Firestore is slow/unavailable.
     }
-  }
-
-  /// Looks up [email] in Firestore. `reachedServer` tells the caller whether
-  /// the query actually completed (so it can tell "account doesn't exist"
-  /// apart from "couldn't check" and only fall back to a local cache in the
-  /// latter case — see [login]).
-  Future<({bool reachedServer, StudentModel? student})> _findStudentByEmailFromFirestore(
-    String email,
-  ) async {
-    await _ensureAnonymousAuth();
-    final collection = _studentsCollection;
-    if (collection == null) {
-      state = state.copyWith(error: 'Firebase not configured. Cannot look up account.');
-      return (reachedServer: false, student: null);
-    }
-
-    // Try up to 2 times — first attempt may hit a cold auth state.
-    for (int attempt = 0; attempt < 2; attempt++) {
-      try {
-        final snapshot = await collection
-            .where('email', isEqualTo: email.toLowerCase())
-            .get()
-            .timeout(const Duration(seconds: 10));
-
-        if (snapshot.docs.isNotEmpty) {
-          // Duplicate user docs can exist for one email (e.g. an old copy that
-          // was archived/removed alongside the current active one). Prefer an
-          // ACTIVE document; only block when every match is removed/archived,
-          // so a stale duplicate can't lock a valid account out.
-          Map<String, dynamic>? activeData;
-          for (final doc in snapshot.docs) {
-            if (!_isRemovedData(doc.data())) {
-              activeData = doc.data();
-              break;
-            }
-          }
-          if (activeData != null) {
-            return (
-              reachedServer: true,
-              student: _normalizeStudentStatus(StudentModel.fromJson(activeData)),
-            );
-          }
-          // Every matching document is removed/archived.
-          state = state.copyWith(
-            isLoading: false,
-            error: 'This account is no longer active. Please contact the City Education Department.',
-          );
-          return (reachedServer: true, student: null);
-        }
-        return (reachedServer: true, student: null); // Query succeeded but no matching document.
-      } catch (e) {
-        if (attempt == 0) {
-          // Wait and re-auth before retry.
-          await Future.delayed(const Duration(seconds: 2));
-          await _ensureAnonymousAuth();
-        } else {
-          // Surface the real error on final attempt.
-          state = state.copyWith(
-            isLoading: false,
-            error: 'Could not reach server: ${e.toString().substring(0, e.toString().length.clamp(0, 80))}',
-          );
-          return (reachedServer: false, student: null);
-        }
-      }
-    }
-    return (reachedServer: false, student: null);
   }
 
   static StudentModel _normalizeStudentStatus(StudentModel student) {
@@ -599,6 +538,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _saveLoggedInUser(student.id);
       _listenToStudentDoc(student.id);
 
+      // Discard any grades/attendance/messages/timeline left over from a
+      // PREVIOUS scholar's session on this device — see resetPerStudentProviders.
+      // Must run after _saveLoggedInUser above, since the providers it
+      // invalidates resolve "who is this?" by reading the same SharedPreferences
+      // key that call just wrote.
+      resetPerStudentProviders(_ref);
+
       state = state.copyWith(
         isLoggedIn: true,
         isLoading: false,
@@ -652,24 +598,43 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Resets the password for the account with [email] after the emailed OTP has
   /// been verified (forgot-password flow). Updates the Firestore `password`
   /// field the login check reads. Returns false if no account matches.
-  Future<bool> resetPasswordByEmail(String email, String newPassword) async {
-    final normalized = email.trim().toLowerCase();
-
-    StudentModel? student;
-    for (final s in _registeredStudents.values) {
-      if (s.email.toLowerCase() == normalized) {
-        student = s;
-        break;
+  /// Asks Firebase Auth to email [email] a password-reset link.
+  ///
+  /// Returns null on success, or a message to show the user on failure.
+  ///
+  /// Replaces an earlier flow that emailed a 6-digit code via Cloud Functions
+  /// and then wrote the new password onto the Firestore document. That was
+  /// broken two ways: the endpoints were never deployed, and a plaintext
+  /// `password` field is ignored entirely by real Firebase Auth sign-in (this
+  /// app moved to Auth-backed credentials). Setting another user's password
+  /// requires either a reset token or the Admin SDK, so a client-only OTP
+  /// variant is not possible — Firebase's own reset email is.
+  ///
+  /// `user-not-found` is deliberately reported as success: surfacing it would
+  /// let anyone enumerate which email addresses have accounts. (Firebase's
+  /// email-enumeration protection may already mask that code; handling it here
+  /// keeps the behaviour correct whether or not that setting is on.)
+  Future<String?> sendPasswordResetEmail(String email) async {
+    try {
+      await FirebaseAuth.instance
+          .sendPasswordResetEmail(email: email.trim().toLowerCase());
+      return null;
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'user-not-found':
+          return null;
+        case 'invalid-email':
+          return 'That email address is not valid.';
+        case 'too-many-requests':
+          return 'Too many attempts. Please wait a few minutes before trying again.';
+        case 'network-request-failed':
+          return 'Could not reach the authentication service. Check your connection.';
+        default:
+          return e.message ?? 'Could not send the reset email. Please try again.';
       }
+    } catch (_) {
+      return 'Could not send the reset email. Please try again.';
     }
-    student ??= (await _findStudentByEmailFromFirestore(normalized)).student;
-    if (student == null) return false;
-
-    final updated = student.copyWith(password: newPassword);
-    _registeredStudents[updated.id] = updated;
-    await _saveStudentsToStorage();
-    await _saveStudentToFirestoreSafely(updated);
-    return true;
   }
 
   // Login with registration (auto-login after registration)
@@ -689,6 +654,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _saveStudentToFirestoreSafely(student);
     _listenToStudentDoc(student.id);
 
+    // A freshly registered scholar is a NEW uid, but on a device that was
+    // previously used to register/preview a different one, the same stale-
+    // provider risk applies — see resetPerStudentProviders.
+    resetPerStudentProviders(_ref);
+
     return true;
   }
 
@@ -696,10 +666,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     state = state.copyWith(isLoading: true);
 
+    // Sign out of Firebase Auth too — this previously only cleared the app's
+    // own AuthState/SharedPreferences flag, leaving FirebaseAuth.currentUser
+    // pointed at the outgoing scholar until the next signInWithEmailAndPassword
+    // silently replaced it. Harmless for the login screen itself, but any code
+    // that reads FirebaseAuth.instance.currentUser between logout and the next
+    // login would still see the previous scholar.
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      // Best-effort — a failed signOut must not block clearing local state.
+    }
+
     // Clear login state from persistent storage
     await _saveLoggedInUser(null);
     await _studentSub?.cancel();
     _studentSub = null;
+
+    // Drop the outgoing scholar's cached grades/attendance/messages/etc. now,
+    // rather than waiting for the next login — see resetPerStudentProviders.
+    // With no current student id, each invalidated provider's constructor
+    // finds nothing to load and settles into its empty default state.
+    resetPerStudentProviders(_ref);
 
     await Future.delayed(const Duration(milliseconds: 500));
 
@@ -816,6 +804,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _saveStudentToFirestoreSafely(updated);
   }
 
+  /// Marks the one-time rejection notice as seen for the current student —
+  /// same persistence pattern as [markCelebrationSeen], for the other outcome.
+  Future<void> markRejectionSeen() async {
+    if (state.student == null) return;
+
+    final updated = state.student!.copyWith(rejectionSeen: true);
+    state = state.copyWith(student: updated);
+    _registeredStudents[updated.id] = updated;
+    await _saveStudentsToStorage();
+    await _saveStudentToFirestoreSafely(updated);
+  }
+
   /// Persist submitted scholarship requirements to Firestore so the admin
   /// panel can see which documents the applicant has submitted.
   Future<void> saveApplicationRequirements(
@@ -837,7 +837,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
 // Provider
 final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier();
+  return AuthNotifier(ref);
 });
 
 // Convenience providers

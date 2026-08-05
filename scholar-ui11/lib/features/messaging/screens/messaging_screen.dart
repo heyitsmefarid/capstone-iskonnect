@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -7,12 +9,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/core/utils/formatters.dart';
 import 'package:iskonnectttt/core/models/group_chat_model.dart';
-import 'dart:typed_data';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:iskonnectttt/core/models/message_attachment_model.dart';
 import 'package:iskonnectttt/core/services/storage_service.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:iskonnectttt/features/messaging/providers/messaging_provider.dart';
+import 'package:iskonnectttt/shared/utils/attachment_download.dart';
 import 'package:iskonnectttt/shared/widgets/loading_widget.dart';
 
 class MessagingScreen extends ConsumerStatefulWidget {
@@ -561,7 +562,8 @@ class _MessagingScreenState extends ConsumerState<MessagingScreen>
 }
 
 /// A received attachment shown inside a message bubble: name + an explicit
-/// Download action (not just tap-to-open) via url_launcher.
+/// Download action that fetches and saves the file (or triggers a browser
+/// download on web) instead of just opening the URL externally.
 class _AttachmentLink extends StatelessWidget {
   final MessageAttachment attachment;
   final bool isFromUser;
@@ -572,22 +574,11 @@ class _AttachmentLink extends StatelessWidget {
     final ext = attachment.name.contains('.')
         ? attachment.name.split('.').last.toLowerCase()
         : '';
-    return ['jpg', 'jpeg', 'png', 'gif'].contains(ext);
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(ext);
   }
 
-  Future<void> _download(BuildContext context) async {
-    // Cloudinary's plain secure_url: fl_attachment was tried here but caused
-    // ERR_INVALID_RESPONSE against this account's delivery settings, so this
-    // just opens/saves the file via whatever the OS/browser does with it.
-    final ok = await launchUrl(
-      Uri.parse(attachment.url),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the file.')),
-      );
-    }
+  Future<void> _download(BuildContext context) {
+    return downloadAttachment(context, url: attachment.url, fileName: attachment.name);
   }
 
   @override

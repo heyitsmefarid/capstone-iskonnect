@@ -1,34 +1,57 @@
 import 'package:intl/intl.dart';
 
+/// The Philippines has observed UTC+08:00 year-round since 1978, with no DST,
+/// so a fixed offset is exact here — no timezone database required.
+const Duration _kManilaOffset = Duration(hours: 8);
+
+/// Re-expresses [dt] as Asia/Manila wall-clock time.
+///
+/// Timestamps reach the app through `DateTime.parse`, and an ISO-8601 string
+/// with a `Z` suffix produces a **UTC** DateTime. `DateFormat` renders whichever
+/// wall clock the DateTime carries, so those values displayed 8 hours early
+/// (an announcement posted 11:54 AM in Manila showed as 3:54 AM).
+///
+/// Normalising through `toUtc()` first makes this correct for any input zone
+/// and idempotent for values already in Manila local time — applying it to a
+/// UTC+8 DateTime subtracts 8 then adds 8, leaving the wall clock unchanged.
+/// That is why it is safe to apply to every formatter rather than only where a
+/// `Z` suffix is known to be present.
+///
+/// The result is a UTC-flagged DateTime whose calendar fields hold Manila time,
+/// which is exactly what `DateFormat` needs to print.
+DateTime _manila(DateTime dt) => dt.toUtc().add(_kManilaOffset);
+
 class Formatters {
-  // Date Formatters
+  // Date Formatters — all render in Asia/Manila, independent of device timezone.
   static String formatDate(DateTime date) {
-    return DateFormat('MMMM d, yyyy').format(date);
+    return DateFormat('MMMM d, yyyy').format(_manila(date));
   }
 
   static String formatDateShort(DateTime date) {
-    return DateFormat('MMM d, yyyy').format(date);
+    return DateFormat('MMM d, yyyy').format(_manila(date));
   }
 
   static String formatDateNumeric(DateTime date) {
-    return DateFormat('MM/dd/yyyy').format(date);
+    return DateFormat('MM/dd/yyyy').format(_manila(date));
   }
 
   static String formatDateTime(DateTime dateTime) {
-    return DateFormat('MMMM d, yyyy h:mm a').format(dateTime);
+    return DateFormat('MMMM d, yyyy h:mm a').format(_manila(dateTime));
   }
 
   static String formatFullDate(DateTime date) {
-    return DateFormat('EEEE, MMMM d, yyyy').format(date);
+    return DateFormat('EEEE, MMMM d, yyyy').format(_manila(date));
   }
 
   static String formatTime(DateTime time) {
-    return DateFormat('h:mm a').format(time);
+    return DateFormat('h:mm a').format(_manila(time));
   }
 
   static String formatRelativeTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
+    // Compared in UTC on both sides: an elapsed duration is zone-independent,
+    // and mixing a local `now` with a UTC timestamp would skew it by 8 hours.
+    final now = DateTime.now().toUtc();
+    final difference = now.difference(dateTime.toUtc());
 
     if (difference.inDays > 365) {
       return '${(difference.inDays / 365).floor()} year(s) ago';

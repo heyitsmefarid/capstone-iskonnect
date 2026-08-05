@@ -18,6 +18,8 @@ import {
   TrendingUp,
   FileCheck,
   UserCheck,
+  History,
+  X,
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
@@ -26,7 +28,66 @@ import {
 } from 'lucide-react';
 
 export default function ScholarshipEvaluation() {
-  const { applicants, updateApplicant } = useApp();
+  const { applicants, updateApplicant, systemSettings, events, schoolYears } = useApp();
+
+  // The currently active School Year + Semester — Attendance and Academic
+  // Records below are scoped to this term (see countedAttendance/
+  // countedGradeRecords) so a new semester starts every scholar back at a
+  // clean slate here instead of carrying forward a ratio built up over every
+  // past semester. Full history remains available via the History button.
+  const activeTerm = (() => {
+    for (const sy of schoolYears) {
+      const activeSem = (sy.semesters || []).find((s) => s.isActive);
+      if (sy.isActive && activeSem) return { schoolYear: sy.label, semester: activeSem.name };
+    }
+    return null;
+  })();
+
+  // Every configured term, most recent first — used by the History modal.
+  const termOptions = (schoolYears || [])
+    .flatMap((sy) => (sy.semesters || []).map((sem) => ({
+      schoolYear: sy.label,
+      semester: sem.name,
+      order: sem.order,
+      startYear: sy.startYear,
+      isActive: !!sy.isActive && !!sem.isActive,
+    })))
+    .sort((a, b) => (b.startYear - a.startYear) || (b.order - a.order));
+
+  // Attendance is only meaningful against events that still exist: a deleted
+  // event leaves its records on each scholar's document, and counting those
+  // made this page disagree with the Attendance screen (which now ignores
+  // them) and inflated absence/compliance figures. Also scoped to the active
+  // term by default — pass a specific term (or `null` for full history).
+  const countedAttendance = (scholar, term = activeTerm) => {
+    const termEvents = term
+      ? (events || []).filter((e) => e.schoolYear === term.schoolYear && e.semester === term.semester)
+      : (events || []);
+    const eventNames = new Set(termEvents.map((e) => e.name));
+    return (scholar.attendance || []).filter((a) => eventNames.has(a.activity));
+  };
+
+  // Same rule for grade records: deleteSchoolYear/deleteSemester (School Year
+  // Management) only remove the term from `school_years` — they never strip
+  // the grade subjects a scholar has on file for that term, so a removed term
+  // left its subjects permanently counted in Academic Records here. Also
+  // scoped to the active term by default, same as countedAttendance above.
+  const validTermKeys = new Set(
+    (schoolYears || []).flatMap((sy) =>
+      (sy.semesters || []).map((sem) => `${sy.label}::${sem.name}`)
+    )
+  );
+  const countedGradeRecords = (scholar, term = activeTerm) =>
+    (scholar.grades || []).filter((r) => {
+      if (!validTermKeys.has(`${r.schoolYear}::${r.semester}`)) return false;
+      if (!term) return true;
+      return r.schoolYear === term.schoolYear && r.semester === term.semester;
+    });
+
+  // Which scholar's term-by-term History modal is open, if any.
+  const [historyScholar, setHistoryScholar] = useState(null);
+
+  const numberOfSemesters = systemSettings?.numberOfSemesters || 8;
   const { onMenuClick } = useOutletContext() || {};
   const activeTab = 'overall';
   const [searchTerm, setSearchTerm] = useState('');
@@ -66,7 +127,15 @@ export default function ScholarshipEvaluation() {
   );
 
   const getAttendanceMetrics = (scholar) => {
-    const attendance = scholar.attendance || [];
+    // Counted only against events that still exist — same rule as
+    // countedAttendance above, which the Attendance Compliance Review tab on
+    // this same page already used. This function read scholar.attendance
+    // directly instead, so a scholar's ratio disagreed depending on which tab
+    // of THIS page you looked at: a deleted event's leftover record (see
+    // deleteEvent in AppContext.jsx) still counted here even after it had
+    // stopped counting in the Attendance tab and on the Attendance/Dashboard
+    // screens elsewhere in the app.
+    const attendance = countedAttendance(scholar);
     const total = attendance.length;
     const present = attendance.filter(a => a.present).length;
     const absences = total - present;
@@ -76,7 +145,7 @@ export default function ScholarshipEvaluation() {
   };
 
   const getAcademicMetrics = (scholar) => {
-    const gradeRecords = scholar.grades || [];
+    const gradeRecords = countedGradeRecords(scholar);
     const allSubjects = gradeRecords.flatMap(record => record.subjects || []);
     const totalSubjects = allSubjects.length;
 
@@ -205,7 +274,7 @@ export default function ScholarshipEvaluation() {
       }
     }
 
-    if (semestersUsed >= 6) {
+    if (semestersUsed >= numberOfSemesters - 2) {
       reasons.push('Approaching semester limit');
       score -= 10;
     }
@@ -411,22 +480,31 @@ export default function ScholarshipEvaluation() {
           return nameA.localeCompare(nameB) * multiplier;
         case 'school':
           return a.school.localeCompare(b.school) * multiplier;
+        // total/attended/rate below all switched from the raw
+        // `a.attendance || []` array to countedAttendance(a) (deleted-events-
+        // excluded), matching 'absences' just below and the Attendance
+        // Compliance Review render further down this page. Sorting by the
+        // raw array while every displayed number is already counted made the
+        // sort order visibly disagree with the column being sorted.
         case 'total':
-          return ((a.attendance || []).length - (b.attendance || []).length) * multiplier;
-        case 'attended':
-          const presentA = (a.attendance || []).filter(att => att.present).length;
-          const presentB = (b.attendance || []).filter(att => att.present).length;
+          return (countedAttendance(a).length - countedAttendance(b).length) * multiplier;
+        case 'attended': {
+          const presentA = countedAttendance(a).filter(att => att.present).length;
+          const presentB = countedAttendance(b).filter(att => att.present).length;
           return (presentA - presentB) * multiplier;
-        case 'absences':
-          const absencesA = (a.attendance || []).filter(att => !att.present).length;
-          const absencesB = (b.attendance || []).filter(att => !att.present).length;
+        }
+        case 'absences': {
+          const absencesA = countedAttendance(a).filter(att => !att.present).length;
+          const absencesB = countedAttendance(b).filter(att => !att.present).length;
           return (absencesA - absencesB) * multiplier;
-        case 'rate':
-          const rateA = (a.attendance || []).length > 0 ? 
-            ((a.attendance || []).filter(att => att.present).length / (a.attendance || []).length * 100) : 0;
-          const rateB = (b.attendance || []).length > 0 ? 
-            ((b.attendance || []).filter(att => att.present).length / (b.attendance || []).length * 100) : 0;
+        }
+        case 'rate': {
+          const totalA = countedAttendance(a).length;
+          const totalB = countedAttendance(b).length;
+          const rateA = totalA > 0 ? (countedAttendance(a).filter(att => att.present).length / totalA * 100) : 0;
+          const rateB = totalB > 0 ? (countedAttendance(b).filter(att => att.present).length / totalB * 100) : 0;
           return (rateA - rateB) * multiplier;
+        }
         case 'status':
           return (a.status || '').localeCompare(b.status || '') * multiplier;
         default:
@@ -534,15 +612,15 @@ export default function ScholarshipEvaluation() {
                     <SortIcon column="status" currentSort={overallSort} />
                   </div>
                 </th>
-                <th className="metric-col" onClick={() => handleOverallSort('attendanceProgress')} style={{ cursor: 'pointer' }}>
+                <th className="metric-col" onClick={() => handleOverallSort('attendanceProgress')} style={{ cursor: 'pointer' }} title="This term only — see History for past semesters">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    Attendance
+                    Attendance (This Term)
                     <SortIcon column="attendanceProgress" currentSort={overallSort} />
                   </div>
                 </th>
-                <th className="metric-col" onClick={() => handleOverallSort('academicProgress')} style={{ cursor: 'pointer' }}>
+                <th className="metric-col" onClick={() => handleOverallSort('academicProgress')} style={{ cursor: 'pointer' }} title="This term only — see History for past semesters">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    Academic Records
+                    Academic Records (This Term)
                     <SortIcon column="academicProgress" currentSort={overallSort} />
                   </div>
                 </th>
@@ -585,10 +663,16 @@ export default function ScholarshipEvaluation() {
                     </span>
                   </td>
                   <td className="action-col">
-                    <button className="btn btn-sm btn-primary action-btn" onClick={() => handleEditStatus(evaluation.scholar)}>
-                      <FileCheck size={14} />
-                      Edit Status
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'stretch' }}>
+                      <button className="btn btn-sm btn-primary action-btn" onClick={() => handleEditStatus(evaluation.scholar)}>
+                        <FileCheck size={14} />
+                        Edit Status
+                      </button>
+                      <button className="btn btn-sm btn-secondary action-btn" onClick={() => setHistoryScholar(evaluation.scholar)}>
+                        <History size={14} />
+                        History
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -780,7 +864,7 @@ export default function ScholarshipEvaluation() {
                                 {standing}
                               </span>
                             </td>
-                            <td>{scholar.semestersUsed || 0}/8</td>
+                            <td>{scholar.semestersUsed || 0}/{numberOfSemesters}</td>
                             <td>
                               <span className={`status-badge ${scholar.status}`}>
                                 {scholar.status?.toUpperCase()}
@@ -926,7 +1010,7 @@ export default function ScholarshipEvaluation() {
                     {attendanceScholars
                       .slice((attendancePage - 1) * attendanceItemsPerPage, attendancePage * attendanceItemsPerPage)
                       .map(scholar => {
-                        const attendance = scholar.attendance || [];
+                        const attendance = countedAttendance(scholar);
                         const present = attendance.filter(a => a.present).length;
                         const absences = attendance.filter(a => !a.present).length;
                         const total = attendance.length;
@@ -1022,6 +1106,89 @@ export default function ScholarshipEvaluation() {
           </div>
         )}
       </div>
+
+      {/* Term History Modal — Attendance/Academic Records above are scoped to
+          the active term only; this is the "see the old records" view. */}
+      {historyScholar && (
+        <div className="modal-overlay" onClick={() => setHistoryScholar(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+            <div className="modal-header">
+              <h2>
+                <History size={22} />
+                Term History — {formatPersonName(historyScholar)}
+              </h2>
+              <button className="modal-close" onClick={() => setHistoryScholar(null)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {(() => {
+                const rows = termOptions
+                  .map((t) => {
+                    const attendance = countedAttendance(historyScholar, t);
+                    const gradeRecords = countedGradeRecords(historyScholar, t);
+                    const subjects = gradeRecords.flatMap((r) => r.subjects || []);
+                    const passed = subjects.filter((s) => {
+                      const g = typeof s.grade === 'number' ? s.grade : Number.parseFloat(s.grade);
+                      return Number.isFinite(g) && g <= 3.0;
+                    }).length;
+                    return {
+                      term: t,
+                      attendedCount: attendance.filter((a) => a.present).length,
+                      attendanceTotal: attendance.length,
+                      passed,
+                      totalSubjects: subjects.length,
+                    };
+                  })
+                  // Only terms with something on file — nothing to show for a
+                  // term this scholar wasn't enrolled in yet.
+                  .filter((r) => r.attendanceTotal > 0 || r.totalSubjects > 0);
+
+                if (rows.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                      <History size={40} style={{ opacity: 0.3, marginBottom: '0.75rem' }} />
+                      <p>No records found for any term yet.</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="table-container">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Term</th>
+                          <th>Attendance</th>
+                          <th>Academic Records</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r) => (
+                          <tr key={`${r.term.schoolYear}::${r.term.semester}`}>
+                            <td>
+                              {r.term.semester}, A.Y. {r.term.schoolYear}
+                              {r.term.isActive && (
+                                <span className="status-badge approved" style={{ marginLeft: 8 }}>Active</span>
+                              )}
+                            </td>
+                            <td>{r.attendanceTotal > 0 ? `${r.attendedCount}/${r.attendanceTotal}` : '—'}</td>
+                            <td>{r.totalSubjects > 0 ? `${r.passed}/${r.totalSubjects}` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setHistoryScholar(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .evaluation-page {

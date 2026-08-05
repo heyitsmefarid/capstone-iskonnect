@@ -4,6 +4,7 @@ import Swal from 'sweetalert2';
 import {
   Settings, Bell, Shield, Save, RotateCcw, Plus, Trash2, Edit2,
   School, BookOpen, Activity, Flag, CheckCircle, RefreshCw, CreditCard,
+  ClipboardCheck, AlertTriangle,
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import { useApp } from '../context/AppContext';
@@ -13,6 +14,7 @@ import {
   getCollection, addItem, updateItem, deleteItem,
   seedIfEmpty, resetCollection,
 } from '../services/localSettingsStore';
+import { rubricMaxPoints, cleanRubricRows, cleanCustomCriteria, newCriterionId } from '../utils/evaluationRubric';
 
 const TABS = [
   { id: 'config',    label: 'General Config',   icon: Settings },
@@ -21,6 +23,7 @@ const TABS = [
   { id: 'statuses',  label: 'Scholarship Statuses', icon: Activity },
   { id: 'stages',    label: 'Timeline Stages',   icon: Flag },
   { id: 'idCardTemplate', label: 'ID Card Template', icon: CreditCard },
+  { id: 'evaluationRubric', label: 'Evaluation Criteria', icon: ClipboardCheck },
 ];
 
 // Reads an uploaded image's natural pixel dimensions before it's uploaded —
@@ -38,6 +41,24 @@ function readImageDimensions(file) {
     img.src = url;
   });
 }
+
+// Solid green pill for the live ID card template. Deliberately not the shared
+// `.status-badge.active` class, whose translucent 15%-alpha tint is too faint
+// against the dark admin theme to read as a clear "this is live" signal.
+const ACTIVATED_BADGE_STYLE = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  marginLeft: 10,
+  padding: '4px 11px',
+  borderRadius: 999,
+  background: 'var(--success)',
+  color: '#fff',
+  fontSize: '0.72rem',
+  fontWeight: 700,
+  letterSpacing: '0.05em',
+  textTransform: 'uppercase',
+};
 
 const COL_MAP = {
   schools:  'schools',
@@ -58,8 +79,20 @@ export default function SystemSettings() {
     catalogSchools, catalogPrograms,
     addCatalogItem, updateCatalogItem, deleteCatalogItem, resetCatalogToDefaults,
     idCardTemplate, saveIdCardTemplate, deactivateIdCardTemplate,
+    evaluationRubric, updateEvaluationRubric,
   } = useApp();
   const [activeTab, setActiveTab] = useState('config');
+
+  // Evaluation rubric — a local editable draft so typing doesn't write to
+  // Firestore on every keystroke. Synced from the shared `evaluationRubric`
+  // until the admin starts editing (`rubricDirty`), so an external update
+  // doesn't clobber unsaved in-progress edits, but a fresh page load or a
+  // save-elsewhere still reaches this tab.
+  const [rubricDraft, setRubricDraft] = useState(evaluationRubric);
+  const [rubricDirty, setRubricDirty] = useState(false);
+  useEffect(() => {
+    if (!rubricDirty) setRubricDraft(evaluationRubric);
+  }, [evaluationRubric, rubricDirty]);
 
   const [config, setConfig] = useState({
     organizationName: 'Calapan City Education Department',
@@ -259,6 +292,142 @@ export default function SystemSettings() {
     }
   };
 
+  /* ── evaluation rubric tab ──────────────────────────────── */
+  const updateRubricRow = (kind, index, field, value) => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({
+      ...prev,
+      [kind]: prev[kind].map((row, i) => (i === index ? { ...row, [field]: value } : row)),
+    }));
+  };
+  const addRubricRow = (kind) => {
+    setRubricDirty(true);
+    const blank = kind === 'economicRubric'
+      ? { label: '', points: 0, cedula: '', electric: '', description: '' }
+      : { label: '', points: 0, description: '' };
+    setRubricDraft(prev => ({ ...prev, [kind]: [...prev[kind], blank] }));
+  };
+  const removeRubricRow = (kind, index) => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({ ...prev, [kind]: prev[kind].filter((_, i) => i !== index) }));
+  };
+  // Shared by all three built-in weight fields — independent of each
+  // rubric's own point scale (see evaluationRubric.js's computeTotalScore).
+  const setWeight = (key, value) => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({ ...prev, [key]: value }));
+  };
+
+  // "Removing" a built-in category (Requirements/Economic/Examination) zeroes
+  // its weight instead of deleting it outright — those three field names are
+  // hardcoded elsewhere (the scholar app's own score display, Reports.jsx),
+  // so the category itself has to keep existing. A weight of 0 contributes
+  // nothing to the total (computeTotalScore) and hides the category from
+  // Applications.jsx entirely; raising the weight again (this button, or
+  // just typing a new value into the field) brings it right back with its
+  // levels intact, since only the weight was ever touched.
+  const toggleBuiltInWeight = (key, defaultWeight) => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({
+      ...prev,
+      [key]: (Number(prev[key]) || 0) > 0 ? 0 : defaultWeight,
+    }));
+  };
+
+  /* ── custom (admin-added) criteria ──────────────────────── */
+  const addCustomCriterion = () => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({
+      ...prev,
+      customCriteria: [
+        ...(prev.customCriteria || []),
+        { id: newCriterionId(), name: '', type: 'raw', weight: 0, rubric: [] },
+      ],
+    }));
+  };
+  const removeCustomCriterion = (index) => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({
+      ...prev,
+      customCriteria: prev.customCriteria.filter((_, i) => i !== index),
+    }));
+  };
+  const updateCustomCriterion = (index, field, value) => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({
+      ...prev,
+      customCriteria: prev.customCriteria.map((c, i) => (i === index ? { ...c, [field]: value } : c)),
+    }));
+  };
+  const updateCustomCriterionRow = (critIndex, rowIndex, field, value) => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({
+      ...prev,
+      customCriteria: prev.customCriteria.map((c, i) => i === critIndex
+        ? { ...c, rubric: c.rubric.map((r, ri) => (ri === rowIndex ? { ...r, [field]: value } : r)) }
+        : c),
+    }));
+  };
+  const addCustomCriterionRow = (critIndex) => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({
+      ...prev,
+      customCriteria: prev.customCriteria.map((c, i) => i === critIndex
+        ? { ...c, rubric: [...c.rubric, { label: '', points: 0, description: '' }] }
+        : c),
+    }));
+  };
+  const removeCustomCriterionRow = (critIndex, rowIndex) => {
+    setRubricDirty(true);
+    setRubricDraft(prev => ({
+      ...prev,
+      customCriteria: prev.customCriteria.map((c, i) => i === critIndex
+        ? { ...c, rubric: c.rubric.filter((_, ri) => ri !== rowIndex) }
+        : c),
+    }));
+  };
+
+  const requirementsMaxPoints = rubricMaxPoints(rubricDraft.requirementsRubric);
+  const economicMaxPoints = rubricMaxPoints(rubricDraft.economicRubric);
+  const requirementsWeightValue = Number(rubricDraft.requirementsWeight) || 0;
+  const economicWeightValue = Number(rubricDraft.economicWeight) || 0;
+  const examWeightValue = Number(rubricDraft.examWeight) || 0;
+  const customCriteriaValue = rubricDraft.customCriteria || [];
+  const customWeightTotal = customCriteriaValue.reduce((sum, c) => sum + (Number(c.weight) || 0), 0);
+  const weightsSumTo100 =
+    requirementsWeightValue + economicWeightValue + examWeightValue + customWeightTotal === 100;
+
+  const handleSaveRubric = async () => {
+    const cleanRequirements = cleanRubricRows(rubricDraft.requirementsRubric);
+    const cleanEconomic = cleanRubricRows(rubricDraft.economicRubric, ['cedula', 'electric']);
+
+    if (cleanRequirements.length === 0 || cleanEconomic.length === 0) {
+      Swal.fire({
+        title: 'At least one level required',
+        text: 'Both Completion of Requirements and Economic Background need at least one scoring level with a label.',
+        icon: 'warning',
+      });
+      return;
+    }
+
+    const cleanCustom = cleanCustomCriteria(rubricDraft.customCriteria);
+
+    try {
+      await updateEvaluationRubric({
+        requirementsRubric: cleanRequirements,
+        economicRubric: cleanEconomic,
+        requirementsWeight: Math.max(0, Number(rubricDraft.requirementsWeight) || 0),
+        economicWeight: Math.max(0, Number(rubricDraft.economicWeight) || 0),
+        examWeight: Math.max(0, Number(rubricDraft.examWeight) || 0),
+        customCriteria: cleanCustom,
+      });
+      setRubricDirty(false);
+      Swal.fire({ title: 'Saved', text: 'Evaluation criteria updated.', icon: 'success', timer: 1500, showConfirmButton: false });
+    } catch (err) {
+      Swal.fire({ title: 'Save failed', text: err?.message || 'Could not save.', icon: 'error' });
+    }
+  };
+
   /* ── field definitions ─────────────────────────────────── */
   const getFields = (tab) => {
     switch (tab) {
@@ -399,7 +568,9 @@ export default function SystemSettings() {
         <div className="section-header-row">
           <CreditCard size={18} /><h3>ID Card Images</h3>
           {idCardTemplate?.isActive && (
-            <span className="status-badge active" style={{ marginLeft: 8 }}>Activated</span>
+            <span style={ACTIVATED_BADGE_STYLE}>
+              <CheckCircle size={13} /> Activated
+            </span>
           )}
         </div>
         <div className="settings-form">
@@ -415,10 +586,26 @@ export default function SystemSettings() {
               {templateUploading === field && (
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Uploading…</span>
               )}
+              {/* A file input always renders "No file chosen" after a reload,
+                  which made saved uploads look lost. Show the stored image
+                  itself so it's obvious the upload is still in place and the
+                  input above only replaces it. */}
               {templateForm[field] && templateUploading !== field && (
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', wordBreak: 'break-all' }}>
-                  Current: {templateForm[field]}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+                  <img
+                    src={templateForm[field]}
+                    alt={`Saved ${label}`}
+                    style={{
+                      width: 72, height: 44, objectFit: 'contain',
+                      background: '#fff', borderRadius: 4,
+                      border: '1px solid rgba(34, 197, 94, 0.5)', flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                    <strong style={{ color: 'var(--success)' }}>Saved.</strong>{' '}
+                    Kept unless you choose a new file to replace it.
+                  </span>
+                </div>
               )}
             </div>
           ))}
@@ -460,6 +647,288 @@ export default function SystemSettings() {
             <Trash2 size={16} /> Deactivate Template
           </button>
         )}
+      </div>
+    </div>
+  );
+
+  /* ── evaluation rubric tab ──────────────────────────────── */
+  const renderEvaluationRubricTab = () => (
+    <div className="settings-grid" style={{ gridTemplateColumns: '1fr' }}>
+      <section className="settings-section">
+        <div className="section-header-row" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ClipboardCheck size={18} />
+            <h3>Completion of Requirements ({requirementsWeightValue}%)</h3>
+          </div>
+          <button
+            className={`btn btn-sm ${requirementsWeightValue > 0 ? 'btn-danger' : 'btn-secondary'}`}
+            onClick={() => toggleBuiltInWeight('requirementsWeight', 20)}
+          >
+            {requirementsWeightValue > 0 ? <><Trash2 size={13} /> Remove</> : <><RotateCcw size={13} /> Restore</>}
+          </button>
+        </div>
+        {requirementsWeightValue === 0 && (
+          <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: 'var(--warning, #f59e0b)' }}>
+            Hidden from Applications.jsx — its levels below are kept, just not scored, until weight is set again.
+          </p>
+        )}
+        <div className="form-group" style={{ maxWidth: 220, marginBottom: '1rem' }}>
+          <label>Weight (% of total score)</label>
+          <input type="number" min="0" max="100" value={rubricDraft.requirementsWeight}
+            onChange={e => setWeight('requirementsWeight', e.target.value)} />
+        </div>
+        <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+          Levels below are scored on their own point scale (currently 0–{requirementsMaxPoints}); a picked level is
+          proportionally scaled onto the weight above, so renumbering these points doesn't change what the category is worth.
+        </p>
+        <div className="table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Level</th>
+                <th style={{ width: 90 }}>Points</th>
+                <th>Description</th>
+                <th style={{ width: 50 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {rubricDraft.requirementsRubric.map((r, i) => (
+                <tr key={i}>
+                  <td>
+                    <input type="text" value={r.label}
+                      onChange={e => updateRubricRow('requirementsRubric', i, 'label', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" min="0" value={r.points}
+                      onChange={e => updateRubricRow('requirementsRubric', i, 'points', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="text" value={r.description}
+                      onChange={e => updateRubricRow('requirementsRubric', i, 'description', e.target.value)} />
+                  </td>
+                  <td>
+                    <button className="btn btn-sm btn-danger" onClick={() => removeRubricRow('requirementsRubric', i)}>
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <button className="btn btn-secondary" style={{ marginTop: '0.75rem' }} onClick={() => addRubricRow('requirementsRubric')}>
+          <Plus size={15} /> Add Level
+        </button>
+      </section>
+
+      <section className="settings-section">
+        <div className="section-header-row" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ClipboardCheck size={18} />
+            <h3>Economic Background ({economicWeightValue}%)</h3>
+          </div>
+          <button
+            className={`btn btn-sm ${economicWeightValue > 0 ? 'btn-danger' : 'btn-secondary'}`}
+            onClick={() => toggleBuiltInWeight('economicWeight', 30)}
+          >
+            {economicWeightValue > 0 ? <><Trash2 size={13} /> Remove</> : <><RotateCcw size={13} /> Restore</>}
+          </button>
+        </div>
+        {economicWeightValue === 0 && (
+          <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: 'var(--warning, #f59e0b)' }}>
+            Hidden from Applications.jsx — its levels below are kept, just not scored, until weight is set again.
+          </p>
+        )}
+        <div className="form-group" style={{ maxWidth: 220, marginBottom: '1rem' }}>
+          <label>Weight (% of total score)</label>
+          <input type="number" min="0" max="100" value={rubricDraft.economicWeight}
+            onChange={e => setWeight('economicWeight', e.target.value)} />
+        </div>
+        <p style={{ margin: '-0.5rem 0 1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+          Levels below are scored on their own point scale (currently 0–{economicMaxPoints}); a picked level is
+          proportionally scaled onto the weight above, so renumbering these points doesn't change what the category is worth.
+        </p>
+        <div className="table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Level</th>
+                <th style={{ width: 90 }}>Points</th>
+                <th>Cedula (Both Parents)</th>
+                <th>Electric Bills (Avg)</th>
+                <th>Description</th>
+                <th style={{ width: 50 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {rubricDraft.economicRubric.map((r, i) => (
+                <tr key={i}>
+                  <td>
+                    <input type="text" value={r.label}
+                      onChange={e => updateRubricRow('economicRubric', i, 'label', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" min="0" value={r.points}
+                      onChange={e => updateRubricRow('economicRubric', i, 'points', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="text" value={r.cedula}
+                      onChange={e => updateRubricRow('economicRubric', i, 'cedula', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="text" value={r.electric}
+                      onChange={e => updateRubricRow('economicRubric', i, 'electric', e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="text" value={r.description}
+                      onChange={e => updateRubricRow('economicRubric', i, 'description', e.target.value)} />
+                  </td>
+                  <td>
+                    <button className="btn btn-sm btn-danger" onClick={() => removeRubricRow('economicRubric', i)}>
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <button className="btn btn-secondary" style={{ marginTop: '0.75rem' }} onClick={() => addRubricRow('economicRubric')}>
+          <Plus size={15} /> Add Level
+        </button>
+      </section>
+
+      <section className="settings-section">
+        <div className="section-header-row" style={{ justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Settings size={18} />
+            <h3>Examination Weight ({examWeightValue}%)</h3>
+          </div>
+          <button
+            className={`btn btn-sm ${examWeightValue > 0 ? 'btn-danger' : 'btn-secondary'}`}
+            onClick={() => toggleBuiltInWeight('examWeight', 50)}
+          >
+            {examWeightValue > 0 ? <><Trash2 size={13} /> Remove</> : <><RotateCcw size={13} /> Restore</>}
+          </button>
+        </div>
+        {examWeightValue === 0 && (
+          <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: 'var(--warning, #f59e0b)' }}>
+            Hidden from Applications.jsx until weight is set again.
+          </p>
+        )}
+        <div className="settings-form">
+          <div className="form-group">
+            <label>Examination (% of total score)</label>
+            <input type="number" min="0" max="100" value={rubricDraft.examWeight}
+              onChange={e => setWeight('examWeight', e.target.value)} style={{ maxWidth: 160 }} />
+          </div>
+        </div>
+      </section>
+
+      {customCriteriaValue.map((criterion, ci) => (
+        <section className="settings-section" key={criterion.id}>
+          <div className="section-header-row" style={{ justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ClipboardCheck size={18} />
+              <h3>{criterion.name || 'New Criteria'} ({Number(criterion.weight) || 0}%)</h3>
+            </div>
+            <button className="btn btn-sm btn-danger" onClick={() => removeCustomCriterion(ci)}>
+              <Trash2 size={13} /> Remove Criteria
+            </button>
+          </div>
+
+          <div className="settings-form" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+            <div className="form-group" style={{ maxWidth: 280 }}>
+              <label>Criteria Name</label>
+              <input type="text" value={criterion.name} placeholder="e.g. Interview"
+                onChange={e => updateCustomCriterion(ci, 'name', e.target.value)} />
+            </div>
+            <div className="form-group" style={{ maxWidth: 180 }}>
+              <label>Weight (% of total score)</label>
+              <input type="number" min="0" max="100" value={criterion.weight}
+                onChange={e => updateCustomCriterion(ci, 'weight', e.target.value)} />
+            </div>
+            <div className="form-group" style={{ maxWidth: 240 }}>
+              <label>Scoring Method</label>
+              <select value={criterion.type} onChange={e => updateCustomCriterion(ci, 'type', e.target.value)}>
+                <option value="raw">Direct score (0–100)</option>
+                <option value="rubric">Rubric levels (like Requirements)</option>
+              </select>
+            </div>
+          </div>
+
+          {criterion.type === 'raw' ? (
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Scored directly on a 0–100 scale per applicant, weighted by the percentage above — same as Examination.
+            </p>
+          ) : (
+            <>
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Level</th>
+                      <th style={{ width: 90 }}>Points</th>
+                      <th>Description</th>
+                      <th style={{ width: 50 }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {criterion.rubric.map((r, ri) => (
+                      <tr key={ri}>
+                        <td>
+                          <input type="text" value={r.label}
+                            onChange={e => updateCustomCriterionRow(ci, ri, 'label', e.target.value)} />
+                        </td>
+                        <td>
+                          <input type="number" min="0" value={r.points}
+                            onChange={e => updateCustomCriterionRow(ci, ri, 'points', e.target.value)} />
+                        </td>
+                        <td>
+                          <input type="text" value={r.description}
+                            onChange={e => updateCustomCriterionRow(ci, ri, 'description', e.target.value)} />
+                        </td>
+                        <td>
+                          <button className="btn btn-sm btn-danger" onClick={() => removeCustomCriterionRow(ci, ri)}>
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {criterion.rubric.length === 0 && (
+                      <tr><td colSpan={4} style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)' }}>
+                        No levels yet — add at least one.
+                      </td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <button className="btn btn-secondary" style={{ marginTop: '0.75rem' }} onClick={() => addCustomCriterionRow(ci)}>
+                <Plus size={15} /> Add Level
+              </button>
+            </>
+          )}
+        </section>
+      ))}
+
+      <button className="btn btn-secondary" onClick={addCustomCriterion}>
+        <Plus size={15} /> Add New Criteria
+      </button>
+
+      <div className={`rubric-weight-note ${weightsSumTo100 ? 'ok' : 'warn'}`}>
+        {weightsSumTo100 ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
+        <span>
+          Requirements ({requirementsWeightValue}%) + Economic Background ({economicWeightValue}%) + Examination ({examWeightValue}%)
+          {customCriteriaValue.length > 0 && ` + ${customCriteriaValue.map(c => `${c.name || 'New Criteria'} (${Number(c.weight) || 0}%)`).join(' + ')}`}
+          {' = '}{requirementsWeightValue + economicWeightValue + examWeightValue + customWeightTotal}%
+          {!weightsSumTo100 && ' — these should add up to 100% so total scores stay on a 0-100 scale.'}
+        </span>
+      </div>
+
+      <div className="config-actions">
+        <button className="btn btn-primary" onClick={handleSaveRubric}>
+          <Save size={16} /> Save Evaluation Criteria
+        </button>
       </div>
     </div>
   );
@@ -664,7 +1133,8 @@ export default function SystemSettings() {
         <div className="tab-content-panel">
           {activeTab === 'config' && renderConfigTab()}
           {activeTab === 'idCardTemplate' && renderIdCardTemplateTab()}
-          {activeTab !== 'config' && activeTab !== 'idCardTemplate' && renderCollectionTab(activeTab)}
+          {activeTab === 'evaluationRubric' && renderEvaluationRubricTab()}
+          {!['config', 'idCardTemplate', 'evaluationRubric'].includes(activeTab) && renderCollectionTab(activeTab)}
         </div>
       </div>
 
@@ -725,6 +1195,24 @@ export default function SystemSettings() {
           display: flex;
           gap: 1rem;
           padding-top: 0.5rem;
+        }
+        .rubric-weight-note {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1rem;
+          border-radius: var(--radius-sm);
+          font-size: 0.85rem;
+        }
+        .rubric-weight-note.ok {
+          background: rgba(34, 197, 94, 0.1);
+          border: 1px solid rgba(34, 197, 94, 0.3);
+          color: var(--success, #22c55e);
+        }
+        .rubric-weight-note.warn {
+          background: rgba(245, 158, 11, 0.1);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          color: var(--warning, #f59e0b);
         }
         .checkbox-row {
           display: flex;

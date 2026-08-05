@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { initializeFirebase } from '../services/firebase';
 
-const ADMIN_ROLES = ['admin', 'staff', 'super_admin'];
+const ADMIN_ROLES = ['admin', 'staff', 'viewer', 'super_admin'];
 
 export default function UserManagement() {
   const { onMenuClick } = useOutletContext() || {};

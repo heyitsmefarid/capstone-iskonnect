@@ -5,12 +5,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:iskonnectttt/core/models/student_model.dart';
 import 'package:iskonnectttt/core/theme/app_theme.dart';
 import 'package:iskonnectttt/features/auth/providers/auth_provider.dart';
 import 'package:iskonnectttt/features/celebration/widgets/confetti_layer.dart';
 import 'package:iskonnectttt/features/celebration/widgets/firework_layer.dart';
-import 'package:iskonnectttt/features/celebration/widgets/score_ring.dart';
 
 /// One-time full-screen celebration shown right after an applicant is
 /// approved into a scholar, before they land on the normal scholar
@@ -28,44 +26,26 @@ class CongratulationsScreen extends ConsumerStatefulWidget {
 
 class _CongratulationsScreenState extends ConsumerState<CongratulationsScreen> {
   static const _phase1Duration = Duration(milliseconds: 2800);
-  static const _ringStagger = Duration(milliseconds: 300);
-  static const _autoAdvanceBuffer = Duration(milliseconds: 2500);
+  static const _autoAdvanceBuffer = Duration(milliseconds: 1800);
 
-  bool _showScores = false;
   bool _showContinue = false;
   bool _finished = false;
   Timer? _phaseTimer;
-  Timer? _continueTimer;
   Timer? _autoAdvanceTimer;
 
   @override
   void initState() {
     super.initState();
-    final student = ref.read(currentStudentProvider);
-    final hasAnyScore = student != null &&
-        (student.requirementsScore != null ||
-            student.economicScore != null ||
-            student.examScore != null);
-
     _phaseTimer = Timer(_phase1Duration, () {
       if (!mounted) return;
-      if (hasAnyScore) {
-        setState(() => _showScores = true);
-        _continueTimer = Timer(const Duration(milliseconds: 900), () {
-          if (mounted) setState(() => _showContinue = true);
-        });
-        _autoAdvanceTimer = Timer(_autoAdvanceBuffer, _finish);
-      } else {
-        setState(() => _showContinue = true);
-        _autoAdvanceTimer = Timer(const Duration(milliseconds: 1800), _finish);
-      }
+      setState(() => _showContinue = true);
+      _autoAdvanceTimer = Timer(_autoAdvanceBuffer, _finish);
     });
   }
 
   @override
   void dispose() {
     _phaseTimer?.cancel();
-    _continueTimer?.cancel();
     _autoAdvanceTimer?.cancel();
     super.dispose();
   }
@@ -74,7 +54,6 @@ class _CongratulationsScreenState extends ConsumerState<CongratulationsScreen> {
     if (_finished) return;
     _finished = true;
     _phaseTimer?.cancel();
-    _continueTimer?.cancel();
     _autoAdvanceTimer?.cancel();
 
     if (widget.onFinished != null) {
@@ -110,8 +89,7 @@ class _CongratulationsScreenState extends ConsumerState<CongratulationsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (!_showScores) _buildHeadline(name),
-                      if (_showScores && student != null) _buildScores(student),
+                      _buildHeadline(name),
                       if (_showContinue) _buildContinueButton(),
                     ],
                   ),
@@ -143,56 +121,6 @@ class _CongratulationsScreenState extends ConsumerState<CongratulationsScreen> {
           curve: Curves.elasticOut,
           duration: 700.ms,
         );
-  }
-
-  Widget _buildScores(StudentModel student) {
-    final rings = <Widget>[];
-    if (student.requirementsScore != null) {
-      rings.add(ScoreRing(value: student.requirementsScore!, max: 20, label: 'REQUIREMENTS'));
-    }
-    if (student.economicScore != null) {
-      rings.add(ScoreRing(value: student.economicScore!, max: 30, label: 'ECONOMIC'));
-    }
-    if (student.examScore != null) {
-      rings.add(ScoreRing(value: student.examScore!.round(), max: 100, label: 'EXAMINATION'));
-    }
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text(
-          'YOUR EVALUATION RESULTS',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 13,
-            letterSpacing: .6,
-            color: AppColors.textPrimary,
-          ),
-        ).animate().fadeIn(duration: 400.ms),
-        if (student.hasFullEvaluation) ...[
-          const SizedBox(height: 18),
-          ScoreRing(
-            value: student.totalEvaluationScore!,
-            max: 100,
-            label: 'TOTAL EVALUATION SCORE',
-            diameter: 92,
-          ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.2, end: 0),
-        ],
-        const SizedBox(height: 18),
-        Wrap(
-          spacing: 18,
-          runSpacing: 12,
-          alignment: WrapAlignment.center,
-          children: [
-            for (var i = 0; i < rings.length; i++)
-              rings[i]
-                  .animate(delay: _ringStagger * i)
-                  .fadeIn(duration: 400.ms)
-                  .slideY(begin: 0.2, end: 0),
-          ],
-        ),
-      ],
-    );
   }
 
   Widget _buildContinueButton() {

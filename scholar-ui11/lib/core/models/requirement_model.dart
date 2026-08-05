@@ -7,6 +7,7 @@ class RequirementModel {
   final String? fileName;
   final int? fileSize;
   final String? fileType;
+  final String? fileUrl;
   final DateTime? submittedAt;
   final DateTime? verifiedAt;
   final String? remarks;
@@ -20,6 +21,7 @@ class RequirementModel {
     this.fileName,
     this.fileSize,
     this.fileType,
+    this.fileUrl,
     this.submittedAt,
     this.verifiedAt,
     this.remarks,
@@ -42,6 +44,7 @@ class RequirementModel {
     String? fileName,
     int? fileSize,
     String? fileType,
+    String? fileUrl,
     DateTime? submittedAt,
     DateTime? verifiedAt,
     String? remarks,
@@ -55,6 +58,7 @@ class RequirementModel {
       fileName: fileName ?? this.fileName,
       fileSize: fileSize ?? this.fileSize,
       fileType: fileType ?? this.fileType,
+      fileUrl: fileUrl ?? this.fileUrl,
       submittedAt: submittedAt ?? this.submittedAt,
       verifiedAt: verifiedAt ?? this.verifiedAt,
       remarks: remarks ?? this.remarks,
@@ -71,6 +75,7 @@ class RequirementModel {
       'fileName': fileName,
       'fileSize': fileSize,
       'fileType': fileType,
+      'fileUrl': fileUrl,
       'submittedAt': submittedAt?.toIso8601String(),
       'verifiedAt': verifiedAt?.toIso8601String(),
       'remarks': remarks,
@@ -87,6 +92,7 @@ class RequirementModel {
       fileName: json['fileName'],
       fileSize: json['fileSize'],
       fileType: json['fileType'],
+      fileUrl: json['fileUrl'],
       submittedAt: json['submittedAt'] != null
           ? DateTime.parse(json['submittedAt'])
           : null,

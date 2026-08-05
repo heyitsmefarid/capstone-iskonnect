@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "iskonnect-15238"
+  },
+  "targets": {
+    "iskonnect-15238": {
+      "hosting": {
+        "admin": [
+          "iskonnect-15238"
+        ],
+        "scholar": [
+          "iskonnect-scholar"
+        ]
+      }
+    }
   }
 }

@@ -9,9 +9,13 @@ import { collection, doc, setDoc, getDocs, query, where } from 'firebase/firesto
 import { signInAnonymously } from 'firebase/auth';
 import { initializeFirebase } from './firebase';
 
-const PORTAL_ROLES = ['admin', 'super_admin', 'staff'];
+const PORTAL_ROLES = ['admin', 'super_admin', 'staff', 'viewer'];
 
-const appRole = (role) => (role === 'admin' || role === 'super_admin' ? 'admin' : 'staff');
+const appRole = (role) => {
+  if (role === 'admin' || role === 'super_admin') return 'admin';
+  if (role === 'viewer') return 'viewer';
+  return 'staff';
+};
 
 async function hashPassword(password) {
   const data = new TextEncoder().encode(String(password));

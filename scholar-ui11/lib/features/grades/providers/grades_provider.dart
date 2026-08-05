@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:typed_data';
 import 'package:iskonnectttt/core/models/grade_model.dart';
 import 'package:iskonnectttt/core/services/scholar_firestore_service.dart';
+import 'package:iskonnectttt/core/services/storage_service.dart';
 
 /// Selected academic period for filtering
 class AcademicPeriod {
@@ -38,6 +39,7 @@ class CorSubmission {
   final String fileType;
   final String? filePath;
   final Uint8List? fileBytes;
+  final String? fileUrl;
   final DateTime uploadedAt;
 
   const CorSubmission({
@@ -48,16 +50,222 @@ class CorSubmission {
     required this.fileType,
     this.filePath,
     this.fileBytes,
+    this.fileUrl,
     required this.uploadedAt,
   });
 
   String get periodLabel => '$semester, A.Y. $academicYear';
+
+  Map<String, dynamic> toMap() => {
+        'academicYear': academicYear,
+        'semester': semester,
+        'fileName': fileName,
+        'fileSize': fileSize,
+        'fileType': fileType,
+        'fileUrl': fileUrl,
+        'uploadedAt': uploadedAt.toIso8601String(),
+      };
+
+  factory CorSubmission.fromMap(Map<String, dynamic> m) => CorSubmission(
+        academicYear: m['academicYear']?.toString() ?? 'N/A',
+        semester: m['semester']?.toString() ?? '',
+        fileName: m['fileName']?.toString() ?? 'file',
+        fileSize: m['fileSize'] is num ? (m['fileSize'] as num).toInt() : 0,
+        fileType: m['fileType']?.toString() ?? 'unknown',
+        fileUrl: m['fileUrl']?.toString(),
+        uploadedAt: ScholarFirestoreService.parseDateTime(m['uploadedAt']),
+      );
+}
+
+/// A Certificate of Grades (COG) the scholar uploads per semester. Unlike COR
+/// (kept only in memory), COG is uploaded to storage and persisted to the user
+/// document so the admin can view it and it survives app restarts.
+class CogSubmission {
+  final String academicYear;
+  final String semester;
+  final String fileName;
+  final int fileSize;
+  final String fileType;
+  final String? fileUrl;
+  final DateTime uploadedAt;
+
+  const CogSubmission({
+    required this.academicYear,
+    required this.semester,
+    required this.fileName,
+    required this.fileSize,
+    required this.fileType,
+    this.fileUrl,
+    required this.uploadedAt,
+  });
+
+  String get periodLabel => '$semester, A.Y. $academicYear';
+
+  Map<String, dynamic> toMap() => {
+        'academicYear': academicYear,
+        'semester': semester,
+        'fileName': fileName,
+        'fileSize': fileSize,
+        'fileType': fileType,
+        'fileUrl': fileUrl,
+        'uploadedAt': uploadedAt.toIso8601String(),
+      };
+
+  factory CogSubmission.fromMap(Map<String, dynamic> m) => CogSubmission(
+        academicYear: m['academicYear']?.toString() ?? 'N/A',
+        semester: m['semester']?.toString() ?? '',
+        fileName: m['fileName']?.toString() ?? 'file',
+        fileSize: m['fileSize'] is num ? (m['fileSize'] as num).toInt() : 0,
+        fileType: m['fileType']?.toString() ?? 'unknown',
+        fileUrl: m['fileUrl']?.toString(),
+        uploadedAt: ScholarFirestoreService.parseDateTime(m['uploadedAt']),
+      );
+}
+
+class CogSubmissionsNotifier extends StateNotifier<Map<String, CogSubmission>> {
+  CogSubmissionsNotifier() : super({}) {
+    _load();
+  }
+
+  /// Hydrate previously submitted COGs from the user document.
+  Future<void> _load() async {
+    try {
+      final studentId = await ScholarFirestoreService.currentStudentId();
+      if (studentId == null) return;
+      final doc = await ScholarFirestoreService.fetchStudentDoc(studentId);
+      final raw = doc?['cogSubmissions'];
+      if (raw is! List) return;
+
+      final next = <String, CogSubmission>{};
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final m = Map<String, dynamic>.from(item);
+        final key = m['periodKey']?.toString() ??
+            buildAcademicPeriodKey(
+              academicYear: m['academicYear']?.toString() ?? '',
+              semester: m['semester']?.toString() ?? '',
+            );
+        next[key] = CogSubmission.fromMap(m);
+      }
+      if (next.isNotEmpty) state = next;
+    } catch (_) {}
+  }
+
+  List<Map<String, dynamic>> _serialize() => state.entries
+      .map((e) => {'periodKey': e.key, ...e.value.toMap()})
+      .toList();
+
+  Future<void> _persist() async {
+    final studentId = await ScholarFirestoreService.currentStudentId();
+    if (studentId == null) return;
+    await ScholarFirestoreService.saveStudentFields(studentId, {
+      'cogSubmissions': _serialize(),
+    });
+  }
+
+  /// Uploads the file to storage, records it for the period, and persists to
+  /// Firestore. Returns false if a file was provided but the upload failed.
+  Future<bool> submitCog({
+    required String academicYear,
+    required String semester,
+    required String fileName,
+    required int fileSize,
+    required String fileType,
+    Uint8List? fileBytes,
+  }) async {
+    final key = buildAcademicPeriodKey(
+      academicYear: academicYear,
+      semester: semester,
+    );
+
+    String? fileUrl;
+    if (fileBytes != null) {
+      final studentId = await ScholarFirestoreService.currentStudentId();
+      if (studentId != null) {
+        fileUrl = await StorageService.uploadRequirementFile(
+          studentId: studentId,
+          requirementId: 'cog_$key',
+          fileName: fileName,
+          bytes: fileBytes,
+        );
+      }
+    }
+
+    state = {
+      ...state,
+      key: CogSubmission(
+        academicYear: academicYear,
+        semester: semester,
+        fileName: fileName,
+        fileSize: fileSize,
+        fileType: fileType,
+        fileUrl: fileUrl,
+        uploadedAt: DateTime.now(),
+      ),
+    };
+
+    await _persist();
+    return fileBytes == null || fileUrl != null;
+  }
+
+  Future<void> removeCog({
+    required String academicYear,
+    required String semester,
+  }) async {
+    final key = buildAcademicPeriodKey(
+      academicYear: academicYear,
+      semester: semester,
+    );
+    state = Map<String, CogSubmission>.from(state)..remove(key);
+    await _persist();
+  }
 }
 
 class CorSubmissionsNotifier extends StateNotifier<Map<String, CorSubmission>> {
-  CorSubmissionsNotifier() : super({});
+  CorSubmissionsNotifier() : super({}) {
+    _load();
+  }
 
-  void submitCor({
+  /// Hydrate previously submitted CORs from the user document so they remain
+  /// viewable after an app restart (the uploaded file is fetched by its URL).
+  Future<void> _load() async {
+    try {
+      final studentId = await ScholarFirestoreService.currentStudentId();
+      if (studentId == null) return;
+      final doc = await ScholarFirestoreService.fetchStudentDoc(studentId);
+      final raw = doc?['corSubmissions'];
+      if (raw is! List) return;
+
+      final next = <String, CorSubmission>{};
+      for (final item in raw) {
+        if (item is! Map) continue;
+        final m = Map<String, dynamic>.from(item);
+        final key = m['periodKey']?.toString() ??
+            buildAcademicPeriodKey(
+              academicYear: m['academicYear']?.toString() ?? '',
+              semester: m['semester']?.toString() ?? '',
+            );
+        next[key] = CorSubmission.fromMap(m);
+      }
+      if (next.isNotEmpty) state = next;
+    } catch (_) {}
+  }
+
+  List<Map<String, dynamic>> _serialize() => state.entries
+      .map((e) => {'periodKey': e.key, ...e.value.toMap()})
+      .toList();
+
+  Future<void> _persist() async {
+    final studentId = await ScholarFirestoreService.currentStudentId();
+    if (studentId == null) return;
+    await ScholarFirestoreService.saveStudentFields(studentId, {
+      'corSubmissions': _serialize(),
+    });
+  }
+
+  /// Uploads the file to storage, records it for the period, and persists to
+  /// Firestore. Returns false if a file was provided but the upload failed.
+  Future<bool> submitCor({
     required String academicYear,
     required String semester,
     required String fileName,
@@ -65,11 +273,24 @@ class CorSubmissionsNotifier extends StateNotifier<Map<String, CorSubmission>> {
     required String fileType,
     String? filePath,
     Uint8List? fileBytes,
-  }) {
+  }) async {
     final key = buildAcademicPeriodKey(
       academicYear: academicYear,
       semester: semester,
     );
+
+    String? fileUrl;
+    if (fileBytes != null) {
+      final studentId = await ScholarFirestoreService.currentStudentId();
+      if (studentId != null) {
+        fileUrl = await StorageService.uploadRequirementFile(
+          studentId: studentId,
+          requirementId: 'cor_$key',
+          fileName: fileName,
+          bytes: fileBytes,
+        );
+      }
+    }
 
     state = {
       ...state,
@@ -81,19 +302,25 @@ class CorSubmissionsNotifier extends StateNotifier<Map<String, CorSubmission>> {
         fileType: fileType,
         filePath: filePath,
         fileBytes: fileBytes,
+        fileUrl: fileUrl,
         uploadedAt: DateTime.now(),
       ),
     };
+
+    await _persist();
+    return fileBytes == null || fileUrl != null;
   }
 
-  void removeCor({required String academicYear, required String semester}) {
+  Future<void> removeCor({
+    required String academicYear,
+    required String semester,
+  }) async {
     final key = buildAcademicPeriodKey(
       academicYear: academicYear,
       semester: semester,
     );
-    final nextState = Map<String, CorSubmission>.from(state);
-    nextState.remove(key);
-    state = nextState;
+    state = Map<String, CorSubmission>.from(state)..remove(key);
+    await _persist();
   }
 }
 
@@ -130,15 +357,36 @@ String computeCurrentSchoolYear() {
       : '${now.year - 1}-${now.year}';
 }
 
+// Live-streamed (not a one-time fetch) so a scholar already signed in sees
+// the term switch — and everything keyed off it (current-term grades,
+// attendance, announcements) reset — the moment the admin changes the active
+// term, instead of staying locked to whatever was active when the app
+// first loaded until it's restarted.
 final activeAcademicPeriodProvider =
-    FutureProvider<ActiveAcademicPeriod>((ref) async {
-  final cfg = await ScholarFirestoreService.fetchActiveAcademicPeriod();
-  final sy = (cfg['schoolYear'] ?? '').isNotEmpty
-      ? cfg['schoolYear']!
-      : computeCurrentSchoolYear();
-  final sem =
-      (cfg['semester'] ?? '').isNotEmpty ? cfg['semester']! : '1st Semester';
-  return ActiveAcademicPeriod(sy, sem);
+    StreamProvider<ActiveAcademicPeriod>((ref) {
+  return ScholarFirestoreService.activeAcademicPeriodStream().map((cfg) {
+    final sy = (cfg['schoolYear'] ?? '').isNotEmpty
+        ? cfg['schoolYear']!
+        : computeCurrentSchoolYear();
+    final sem =
+        (cfg['semester'] ?? '').isNotEmpty ? cfg['semester']! : '1st Semester';
+    return ActiveAcademicPeriod(sy, sem);
+  });
+});
+
+/// Grades belonging to the currently active academic period only — a
+/// semester that has already ended shouldn't keep counting toward "current"
+/// stats (e.g. the Dashboard's Subjects card) once a new term has started.
+final currentTermGradesProvider = Provider<List<GradeModel>>((ref) {
+  final allGrades = ref.watch(gradesProvider);
+  final activeAsync = ref.watch(activeAcademicPeriodProvider);
+  return activeAsync.maybeWhen(
+    data: (active) => allGrades
+        .where((g) =>
+            g.academicYear == active.schoolYear && g.semester == active.semester)
+        .toList(),
+    orElse: () => allGrades.where((g) => !g.isGraded).toList(),
+  );
 });
 
 class GradesNotifier extends StateNotifier<List<GradeModel>> {
@@ -323,6 +571,13 @@ final corSubmissionsProvider =
       return CorSubmissionsNotifier();
     });
 
+final cogSubmissionsProvider =
+    StateNotifierProvider<CogSubmissionsNotifier, Map<String, CogSubmission>>((
+      ref,
+    ) {
+      return CogSubmissionsNotifier();
+    });
+
 /// Provider for filtered grades based on selected period
 final filteredGradesProvider = Provider<List<GradeModel>>((ref) {
   final allGrades = ref.watch(gradesProvider);
@@ -353,16 +608,20 @@ final pastGradesProvider = Provider<List<GradeModel>>((ref) {
   return allGrades.where((g) => g.isGraded).toList();
 });
 
-/// Provider for filtered past grades based on selected period
-final filteredPastGradesProvider = Provider<List<GradeModel>>((ref) {
-  final pastGrades = ref.watch(pastGradesProvider);
+/// Every grade record for the selected period (all periods when none is
+/// chosen), graded or not — the same set the screen actually lists.
+///
+/// Replaces an earlier `filteredPastGradesProvider` that applied the same
+/// period filter on top of [pastGradesProvider]'s `isGraded` restriction. It
+/// is gone rather than left alongside this one, so nothing can accidentally
+/// reach for the graded-only variant when it means "everything enrolled".
+final filteredAllGradesProvider = Provider<List<GradeModel>>((ref) {
+  final allGrades = ref.watch(gradesProvider);
   final selectedPeriod = ref.watch(selectedPeriodProvider);
 
-  if (selectedPeriod == null) {
-    return pastGrades;
-  }
+  if (selectedPeriod == null) return allGrades;
 
-  return pastGrades
+  return allGrades
       .where(
         (g) =>
             g.academicYear == selectedPeriod.academicYear &&
@@ -371,8 +630,17 @@ final filteredPastGradesProvider = Provider<List<GradeModel>>((ref) {
       .toList();
 });
 
+/// Header summary for the Grades screen.
+///
+/// Counts every enrolled subject, not just graded ones. It previously read a
+/// graded-only list, so the card reported "2 Subjects / 6 Units" while the list
+/// underneath showed 3 and the dashboard's "enrolled Subjects" tile showed 3 —
+/// the same subjects counted two different ways on one screen.
+///
+/// GWA is unaffected: [GradeSummary.fromGrades] already averages over graded
+/// subjects only, which is correct — an ungraded subject has nothing to average.
 final gradeSummaryProvider = Provider<GradeSummary>((ref) {
-  final grades = ref.watch(filteredPastGradesProvider);
+  final grades = ref.watch(filteredAllGradesProvider);
   return GradeSummary.fromGrades(grades);
 });
 
@@ -395,3 +663,36 @@ final availablePeriodsProvider = Provider<List<AcademicPeriod>>((ref) {
   final notifier = ref.watch(gradesProvider.notifier);
   return notifier.availablePeriods;
 });
+
+/// The admin's per-semester grade confirmation, keyed by
+/// `${academicYear}::${semester}`. Each value is a map like
+/// `{ status: 'confirmed' | 'revision', evaluatedAt }`. A live stream so the
+/// scholar sees the status flip the moment the admin confirms.
+final gradesEvaluationProvider =
+    StreamProvider<Map<String, dynamic>>((ref) async* {
+  final studentId = await ScholarFirestoreService.currentStudentId();
+  if (studentId == null) {
+    yield <String, dynamic>{};
+    return;
+  }
+  yield* ScholarFirestoreService.studentDocStream(studentId).map((doc) {
+    final raw = doc?['gradesEvaluation'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+  });
+});
+
+/// Resolves the confirmation status for a given period from the evaluation map.
+/// Returns 'confirmed', 'revision', or 'pending' (the default before review).
+String gradeConfirmationStatus(
+  Map<String, dynamic> evaluation,
+  String academicYear,
+  String semester,
+) {
+  final entry = evaluation['$academicYear::$semester'];
+  if (entry is Map) {
+    final s = entry['status']?.toString();
+    if (s == 'confirmed') return 'confirmed';
+    if (s == 'revision') return 'revision';
+  }
+  return 'pending';
+}

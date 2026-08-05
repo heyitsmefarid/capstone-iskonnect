@@ -6,6 +6,7 @@ import { logAudit } from '../services/auditLog';
 import { DEFAULT_SCHOOLS, DEFAULT_PROGRAMS } from '../services/localSettingsStore';
 import { syncCatalogToFirestore } from '../services/seedFirestoreCatalog';
 import { matchesExact } from '../utils/filtering';
+import { computeDesiredSchoolMemberships, membershipUnchanged, autoGroupDocId } from '../utils/autoGroupChat';
 
 const AppContext = createContext();
 const SCHOLARSHIP_CAP = 25000;
@@ -252,6 +253,13 @@ const mapStudentToApplicant = (student) => {
     examScore: student.examScore ?? null,
     requirementsScore: student.requirementsScore ?? null,
     economicScore: student.economicScore ?? null,
+    // Scores for admin-added custom evaluation criteria (Administration >
+    // Evaluation Criteria), keyed by criterion id. Round-tripped the same way
+    // as the fields above — see buildUserDocFromApplicant below.
+    customCriteriaScores: student.customCriteriaScores ?? {},
+    // Round-tripped so the admin UI still shows the reason it wrote after a
+    // page refresh (buildUserDocFromApplicant below persists it the same way).
+    rejectionReason: student.rejectionReason ?? null,
     interviewStatus: student.interviewStatus ?? null,
     gwa: student.gwa ?? null,
     semestersUsed: student.semestersUsed ?? 0,
@@ -312,6 +320,17 @@ const buildUserDocFromApplicant = (applicant) => {
     examScore: applicant.examScore ?? null,
     requirementsScore: applicant.requirementsScore ?? null,
     economicScore: applicant.economicScore ?? null,
+    // Scores for admin-added custom evaluation criteria — see the matching
+    // field in mapStudentToApplicant above.
+    customCriteriaScores: applicant.customCriteriaScores ?? {},
+    // The admin's typed-in reason for rejecting this applicant (see the two
+    // "Reject" flows in Applications.jsx). This was previously written into
+    // this component's own local `applicants` state only — it was never
+    // included in the Firestore user-doc shape this function builds, so
+    // `setDoc(..., {merge:true})` silently never wrote it, and the scholar
+    // app (which only ever reads that Firestore doc) had no way to receive it
+    // no matter what the admin typed.
+    rejectionReason: applicant.rejectionReason ?? null,
     interviewStatus: applicant.interviewStatus ?? null,
     ranking: applicant.ranking ?? null,
     gwa: applicant.gwa ?? null,
@@ -384,6 +403,42 @@ const syncApplicantToFirestore = async (applicant) => {
 // Graduated/terminated scholars stay in the list until the semester ends
 // (endOfSemesterScholarsCleanup moves them to Scholar History at that point).
 const ARCHIVE_STATUSES = ['rejected'];
+
+// Default applicant-evaluation rubric — seeds `system_config/evaluationRubric`
+// the first time an admin opens Administration > Evaluation Criteria, and is
+// the fallback used everywhere the rubric is read before that doc exists.
+// Every consumer (Applications.jsx's scoring UI, Reports.jsx's labels, the
+// Evaluation Criteria admin page) reads from `evaluationRubric` below instead
+// of hardcoding these — so editing a row here is a one-time seed, not a
+// second place that needs to match if an admin tweaks a label/point value.
+const DEFAULT_EVALUATION_RUBRIC = {
+  requirementsRubric: [
+    { label: 'Complete & Organized', points: 20, description: 'All requirements submitted on time; complete, accurate, and properly organized' },
+    { label: 'Complete but Slightly Lacking', points: 15, description: 'All requirements submitted but with minor errors or formatting issues' },
+    { label: 'Incomplete (Minor)', points: 10, description: 'Missing 1-2 minor requirements or with noticeable inconsistencies' },
+    { label: 'Incomplete (Major)', points: 5, description: 'Several missing or incorrect documents' },
+    { label: 'Non-compliant', points: 0, description: 'Failed to submit majority of required documents' },
+  ],
+  economicRubric: [
+    { label: 'Highly Disadvantaged', points: 30, cedula: '₱5 – ₱150', electric: '₱500 and below', description: 'Very low declared income; minimal electricity use; 4+ dependents; irregular/no stable income' },
+    { label: 'Disadvantaged', points: 25, cedula: '₱151 – ₱500', electric: '₱501 – ₱1,000', description: 'Low declared income; low consumption; 3-4 dependents; limited financial capacity' },
+    { label: 'Moderately Disadvantaged', points: 20, cedula: '₱501 – ₱1,000', electric: '₱1,001 – ₱2,000', description: 'Modest declared income; average consumption; 1-2 dependents' },
+    { label: 'Slightly Disadvantaged', points: 15, cedula: '₱1,001 – ₱2,000', electric: '₱2,001 – ₱3,500', description: 'Stable income; above-average consumption; 1-2 dependents' },
+    { label: 'Financially Capable', points: 10, cedula: 'Above ₱2,000', electric: 'Above ₱3,500', description: 'Higher declared income; high consumption; few or no dependents' },
+  ],
+  // Each category's real weight in the total score — independent of the
+  // rubric's own point scale above (see evaluationRubric.js's
+  // computeTotalScore). Defaults match the rubrics' current max points
+  // (20 and 30) so nothing changes for anyone who hasn't touched Evaluation
+  // Criteria yet.
+  requirementsWeight: 20,
+  economicWeight: 30,
+  examWeight: 50,
+  // Admin-added scoring categories beyond the three built-in ones — see
+  // evaluationRubric.js's cleanCustomCriteria/computeTotalScore. Empty by
+  // default; nothing changes until an admin adds one in Evaluation Criteria.
+  customCriteria: [],
+};
 
 // A subject is considered failing/INC based solely on its remarks field.
 // Any remarks value other than "Passed" (e.g. Failed, Incomplete, Other)
@@ -570,6 +625,10 @@ export function AppProvider({ children }) {
   // settings` above) so every admin device and the scholar app read the same
   // active template.
   const [idCardTemplate, setIdCardTemplate] = useState(null);
+  // Applicant-evaluation rubric (Requirements/Economic Background rows +
+  // exam weight) — editable in Administration > Evaluation Criteria. Defaults
+  // until the admin saves their own version.
+  const [evaluationRubric, setEvaluationRubric] = useState(DEFAULT_EVALUATION_RUBRIC);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -735,10 +794,42 @@ export function AppProvider({ children }) {
     );
   };
 
+  // Deletes an event AND the attendance it produced.
+  //
+  // A scholar's attendance is not stored on the event — it lives in an
+  // `attendance` array on that scholar's own user document, keyed by the event
+  // NAME. Deleting only the event document therefore orphaned those entries,
+  // and because Attendance.jsx counts any record whose activity no longer
+  // matches a scheduled event as "extra" attendance (the path meant for QR
+  // scans not tied to a scheduled event), deleted events kept showing up in
+  // scholars' totals — e.g. "0/3" with no events left on the page. The delete
+  // confirmation already promised these records would be removed.
+  //
+  // Matching is by name because that is the only link the attendance records
+  // carry; two events sharing a name would clear each other's records, which
+  // is the same assumption the rest of this screen already makes.
   const deleteEvent = async (firestoreId) => {
     const { db, isReady } = initializeFirebase();
     if (!isReady || !db || !firestoreId) return;
+
+    const eventName = events.find((e) => e.firestoreId === firestoreId)?.name;
+
     await deleteDoc(doc(db, 'events', firestoreId));
+    if (!eventName) return;
+
+    const hasRecord = (a) =>
+      (a.attendance || []).some((r) => r.activity === eventName);
+    const stripped = (a) => ({
+      ...a,
+      attendance: (a.attendance || []).filter((r) => r.activity !== eventName),
+    });
+
+    // Persist first, then update local state, so a failed write cannot leave
+    // the UI showing records that still exist in Firestore.
+    await Promise.all(
+      applicants.filter(hasRecord).map((a) => syncApplicantToFirestore(stripped(a)))
+    );
+    setApplicants((prev) => prev.map((a) => (hasRecord(a) ? stripped(a) : a)));
   };
 
   // Direct messages — shared `messages` collection (admin ↔ scholar, two-way)
@@ -821,6 +912,75 @@ export function AppProvider({ children }) {
     await deleteDoc(doc(db, 'group_chats', groupFirestoreId));
   };
 
+  // Auto-managed per-school group chats. One group per ELIGIBLE school (the
+  // same catalog managed in Administration > System Settings > Eligible
+  // Schools) — created upfront even before that school has any scholars, so
+  // the Messages list always shows every school, not just the ones that
+  // happen to have an active scholar yet. Membership is reconciled to
+  // exactly that school's currently-active scholars (approved/active/
+  // on-hold) every time `applicants` changes — so an approval adds the new
+  // scholar and a termination/graduation removes them, no matter which of
+  // the several code paths above changed their status (manual admin action,
+  // the auto-graduation sweep, the auto on-hold/reactivate sweeps, the
+  // auto-absence sweep, or archiving to Scholar History). `autoManaged: true`
+  // + `school` tag these groups so admin-created manual groups (even one that
+  // happens to share a school's name) are never touched by this sweep.
+  const autoGroupCreatingRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!authReady) return;
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db) return;
+
+    const bySchool = computeDesiredSchoolMemberships(applicants);
+    // Union of the eligible-schools catalog and any school name that actually
+    // appears on a scholar record — mirrors the same catalog-plus-actual
+    // pattern already used for the "Scholars per HEI" chart and Reports'
+    // school filter, so a school with a scholar but a not-yet-cataloged name
+    // still gets a group instead of being silently skipped.
+    const allSchoolNames = new Set([
+      ...(catalogSchools || []).map((s) => s?.name).filter(Boolean),
+      ...bySchool.keys(),
+    ]);
+
+    allSchoolNames.forEach((school) => {
+      const desired = bySchool.get(school) || [];
+      const groupId = autoGroupDocId(school);
+      const group = groupChats.find((g) => g.firestoreId === groupId);
+
+      if (!group) {
+        if (autoGroupCreatingRef.current.has(groupId)) return;
+        autoGroupCreatingRef.current.add(groupId);
+        // setDoc + merge on a deterministic id, not addDoc — see autoGroupDocId's
+        // comment for why (this is what makes concurrent/repeated creation safe).
+        // Deliberately omits `messages`/`createdAt`: `!group` only means "not in
+        // this tab's local groupChats snapshot yet", which can be true even when
+        // the doc already exists server-side (the `group_chats` listener just
+        // hasn't caught up) — merge:true only touches fields present in the
+        // payload, so leaving these two out means a real message history or
+        // original creation date can never be clobbered by this write, even if
+        // it fires against an already-existing doc.
+        setDoc(
+          doc(db, 'group_chats', groupId),
+          {
+            name: `${school} Scholars`,
+            school,
+            autoManaged: true,
+            memberIds: desired,
+            createdBy: 'admin',
+          },
+          { merge: true }
+        )
+          .catch(() => {})
+          .finally(() => autoGroupCreatingRef.current.delete(groupId));
+        return;
+      }
+
+      if (membershipUnchanged(group.memberIds, desired)) return;
+      updateDoc(doc(db, 'group_chats', group.firestoreId), { memberIds: desired }).catch(() => {});
+    });
+  }, [authReady, applicants, groupChats, catalogSchools]);
+
   // Publish the active academic year + semester so the scholar app can
   // auto-assign grades/COR to the current period. Mirrors whichever term is
   // actually active in School Year Management — NOT the static System
@@ -883,9 +1043,9 @@ export function AppProvider({ children }) {
             const d = docSnap.data();
             // Include applicants and scholars (an approved applicant becomes a
             // scholar), but skip the admin record and removed records.
-            // Staff/admin accounts live in this same collection — exclude them
-            // so they never leak into the Scholars/Applications lists.
-            if (d.role === 'admin' || d.role === 'staff' || d.role === 'super_admin') return;
+            // Staff/admin/viewer accounts live in this same collection — exclude
+            // them so they never leak into the Scholars/Applications lists.
+            if (['admin', 'staff', 'viewer', 'super_admin'].includes(d.role)) return;
             const type = d.studentType;
             if (type && type !== 'applicant' && type !== 'scholar') return;
             if (d.adminStatus === 'removed') return;
@@ -1113,6 +1273,52 @@ export function AppProvider({ children }) {
     await setDoc(
       doc(db, 'system_config', 'scholarIdCardTemplate'),
       { isActive: false, updatedAt: Date.now(), updatedBy: 'Admin' },
+      { merge: true }
+    );
+  };
+
+  // Applicant-evaluation rubric — a single Firestore doc so every admin
+  // device (and Reports.jsx's labels) stay in sync with whatever an admin
+  // last saved in Administration > Evaluation Criteria.
+  useEffect(() => {
+    if (!authReady) return;
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db) return;
+    const unsubscribe = onSnapshot(
+      doc(db, 'system_config', 'evaluationRubric'),
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        setEvaluationRubric({
+          requirementsRubric: Array.isArray(data.requirementsRubric) && data.requirementsRubric.length > 0
+            ? data.requirementsRubric
+            : DEFAULT_EVALUATION_RUBRIC.requirementsRubric,
+          economicRubric: Array.isArray(data.economicRubric) && data.economicRubric.length > 0
+            ? data.economicRubric
+            : DEFAULT_EVALUATION_RUBRIC.economicRubric,
+          requirementsWeight: typeof data.requirementsWeight === 'number'
+            ? data.requirementsWeight
+            : DEFAULT_EVALUATION_RUBRIC.requirementsWeight,
+          economicWeight: typeof data.economicWeight === 'number'
+            ? data.economicWeight
+            : DEFAULT_EVALUATION_RUBRIC.economicWeight,
+          examWeight: typeof data.examWeight === 'number' ? data.examWeight : DEFAULT_EVALUATION_RUBRIC.examWeight,
+          customCriteria: Array.isArray(data.customCriteria)
+            ? data.customCriteria
+            : DEFAULT_EVALUATION_RUBRIC.customCriteria,
+        });
+      },
+      (error) => console.error('Firestore evaluationRubric listener error:', error)
+    );
+    return () => unsubscribe();
+  }, [authReady]);
+
+  const updateEvaluationRubric = async (updates) => {
+    const { db, isReady } = initializeFirebase();
+    if (!isReady || !db) return;
+    await setDoc(
+      doc(db, 'system_config', 'evaluationRubric'),
+      { ...updates, updatedAt: Date.now(), updatedBy: 'Admin' },
       { merge: true }
     );
   };
@@ -2246,7 +2452,7 @@ export function AppProvider({ children }) {
 
     for (const docSnap of snap.docs) {
       const d = docSnap.data();
-      if (d.role === 'admin' || d.role === 'staff' || d.role === 'super_admin') continue;
+      if (['admin', 'staff', 'viewer', 'super_admin'].includes(d.role)) continue;
       if (d.adminStatus === 'removed') continue;
       const hasName =
         (d.firstName && String(d.firstName).trim()) ||
@@ -2481,9 +2687,13 @@ export function AppProvider({ children }) {
       ...applicants.map(a => a?.school).filter(Boolean),
     ])).sort((a, b) => a.localeCompare(b));
 
+    // "Scholars per HEI" — pending applicants aren't scholars yet (they still
+    // need a decision), so they're excluded here even though they're still in
+    // `applicants`. Everyone else (approved/active/on-hold/terminated/graduated)
+    // counts, same as the rest of this function's status buckets above.
     const bySchool = schoolNames.map(name => ({
       name,
-      count: applicants.filter(a => matchesExact(a.school, name)).length,
+      count: applicants.filter(a => matchesExact(a.school, name) && a.status !== 'pending').length,
     }));
 
     const totalGranted = applicants.reduce((sum, a) => sum + (a.amountGranted || 0), 0);
@@ -2518,9 +2728,15 @@ export function AppProvider({ children }) {
       reasons.push(`Exceeded maximum scholarship duration (${semMax} semesters)`);
     }
 
-    // Check attendance (more than 2 absences)
+    // Check attendance (more than 2 absences). Counted only against events that
+    // still exist — a deleted event's records linger on the scholar document,
+    // and counting those could recommend terminating someone for absences from
+    // events the admin has since removed.
     if (!applicant.isStAugustine) {
-      const absences = (applicant.attendance || []).filter(a => !a.present).length;
+      const scheduledNames = new Set(events.map((e) => e.name));
+      const absences = (applicant.attendance || []).filter(
+        (a) => !a.present && scheduledNames.has(a.activity)
+      ).length;
       if (absences > 2) {
         reasons.push(`Excessive absences (${absences} absences)`);
       }
@@ -2602,6 +2818,8 @@ export function AppProvider({ children }) {
     idCardTemplate,
     saveIdCardTemplate,
     deactivateIdCardTemplate,
+    evaluationRubric,
+    updateEvaluationRubric,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,7 +1,3 @@
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/images/appIcon.jpg"
 name: iskonnectttt
 description: "Iskonnect - City Education Scholarship Program Student Panel"
 publish_to: 'none'
@@ -78,6 +74,10 @@ dependencies:
   flutter_launcher_icons: ^0.14.4
   url_launcher: ^6.3.2
 
+  # Local scheduled notifications (event reminders)
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.9.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -91,3 +91,16 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/animations/
+# App launcher icon (ISKONNECT logo). Regenerate after changing the source
+# image with:  dart run flutter_launcher_icons
+#
+# The adaptive foreground is a separate, pre-padded asset: Android masks the
+# outer third of an adaptive icon, which would clip the ends off the wide
+# "iSKonnect" wordmark if the full square were used directly.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/images/app_icon.png"
+  adaptive_icon_background: "assets/images/app_icon_background.png"
+  adaptive_icon_foreground: "assets/images/app_icon_foreground.png"
